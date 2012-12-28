@@ -39,7 +39,8 @@ import java.util.Properties;
 import sun.misc.BASE64Encoder;
 
 
-public class WSRequest implements HttpConstants {
+public class WSRequest
+{
 	
 	public String pathFull = null;
 	public String[] pathDetails = null;
@@ -76,13 +77,15 @@ public class WSRequest implements HttpConstants {
 	 * for a connection upgrade. These should all be called statically.
 	 * @param request
 	 */
-	public WSRequest(InputStream request) {
+	public WSRequest(InputStream request)
+	{
 		String line;
 		int read;
 		byte[] buff = new byte[1024];
 		long bytesLeft = 0;
 		
-		try {
+		try
+		{
 			// get the first byte
 			setStatus(request.read());
 			
@@ -90,9 +93,11 @@ public class WSRequest implements HttpConstants {
 			setPayload(request);
 			
 			// figure out the masking
-			if (masked) {
+			if (masked)
+			{
 				mask = 0;
-				for (int i=4; i>0; i--) {
+				for (int i=4; i>0; i--)
+				{
 					mask += request.read() << ((i-1)*8);
 				}
 				System.out.println("Mask: "+mask);
