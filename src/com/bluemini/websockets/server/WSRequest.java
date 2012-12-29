@@ -30,37 +30,25 @@ package com.bluemini.websockets.server;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.Properties;
-
-import sun.misc.BASE64Encoder;
 
 
 public class WSRequest
 {
 	
-	public String pathFull = null;
-	public String[] pathDetails = null;
-	public Properties queryDetails = null;
-	public String method = "";
-	public String httpVersion = ""; 
-
-	private ArrayList<String> pathDynamics = new ArrayList<String>();
-	private Properties headers = new Properties();
-	private StringBuilder body;
-	
 	private boolean FIN			= false;
 	private boolean RSV1		= false;
 	private boolean RSV2		= false;
 	private boolean RSV3		= false;
+	public boolean closing		= false;
 	private byte opcode			= 0;
 	private boolean masked		= false;
 	private int mask			= 0;
 	private long payloadSize	= -1;
-	private String payload;
+	private ArrayList<Byte> payload = new ArrayList<Byte>();
+	public WSResponse response	= null;
 	
 	private byte OPCODE_CONTINUATION_FRAME	= 0;
 	private byte OPCODE_TEXT_FRAME			= 1;
@@ -79,6 +67,7 @@ public class WSRequest
 	 */
 	public WSRequest(InputStream request)
 	{
+		resetFlags();
 		String line;
 		int read;
 		byte[] buff = new byte[1024];
@@ -92,35 +81,82 @@ public class WSRequest
 			// figure out the payload length
 			setPayload(request);
 			
-			// figure out the masking
-			if (masked)
+			// read in the rest..if the payload is non-zero
+			if (payloadSize > 0)
 			{
-				mask = 0;
-				for (int i=4; i>0; i--)
-				{
-					mask += request.read() << ((i-1)*8);
-				}
-				System.out.println("Mask: "+mask);
-			}
-			
-			// read in the rest ..
-			do
-			{
-				int bytesRead = request.read(buff);
-				bytesLeft = payloadSize-bytesRead;
-				System.out.println("read bytes: " + bytesRead + ", to read: " + bytesLeft);
-				
-				// unmask the data (if masked)
+				// figure out the masking
 				if (masked)
 				{
-					buff = unmask(buff, bytesRead, mask);
+					mask = 0;
+					for (int i=4; i>0; i--)
+					{
+						mask += request.read() << ((i-1)*8);
+					}
+					System.out.println("Mask: "+mask);
 				}
 				
+				do
+				{
+					int bytesRead = request.read(buff);
+					
+					if (bytesRead >= 0)
+					{
+						bytesLeft = payloadSize-bytesRead;
+						System.out.println("read bytes: " + bytesRead + ", to read: " + bytesLeft);
+						
+						// unmask the data (if masked)
+						if (masked && bytesRead > 0)
+						{
+							buff = unmask(buff, bytesRead, mask);
+						}
+
+						// copy data to payload
+						for (int i=0; i<bytesRead; i++)
+						{
+							payload.add(buff[i]);
+						}
+					}
+					else
+					{
+						bytesLeft = 0;
+					}
+					
+				} while (bytesLeft > 0);
 			}
-			while (bytesLeft <= 0);
 		} catch (IOException ioe) {
 			// anything
+			System.out.println("ERROR: " + ioe.getMessage());
 		}
+		
+		Iterator<Byte> messageIter = payload.iterator();
+		byte[] b = new byte[payload.size()];
+		int c = 0;
+		while (messageIter.hasNext())
+		{
+			b[c] = (byte) messageIter.next();
+			c += 1;
+		}
+		System.out.println(new String(b));
+		
+		// if the opcode is 8, then we're closing
+		if (opcode == this.OPCODE_CONNECTION_CLOSE)
+		{
+			closing = true;
+			response = new WSResponse(opcode, "");
+			System.out.println("Final frame, closing connection");
+		}
+		else
+		{
+			response = new WSResponse(1, "this is a response");
+			System.out.println("Sending a response");
+		}
+
+		// if this is the last frame, reset
+		if (FIN) {
+			System.out.println("Reset all flags as we've received the last frame.");
+			resetFlags();
+		}
+
 	}
 	
 	/**
@@ -130,15 +166,17 @@ public class WSRequest
 	 */
 	private void setStatus(int status)
 	{
-		if ((status & 1) == 1)
+		if ((status & 128) == 128)
 			FIN = true;
-		if ((status & 2) == 2)
+		if ((status & 64) == 64)
 			RSV1 = true;
-		if ((status & 4) == 4)
+		if ((status & 32) == 32)
 			RSV2 = true;
-		if ((status & 8) == 8)
+		if ((status & 16) == 16)
 			RSV3 = true;
-		opcode = (byte) ((status & (128+4+32+16)) >> 4);
+		opcode = (byte) (status & (1+2+4+8));
+		
+		System.out.println("Opcode: "+opcode);
 	}
 	
 	/**
@@ -188,6 +226,23 @@ public class WSRequest
 		}
 		
 		return message;
+	}
+	
+	/**
+	 * resets all the flags. This should be called when the initial constructor
+	 * is run and also after a FIN frame is received.
+	 */
+	private void resetFlags()
+	{
+		FIN			= false;
+		RSV1		= false;
+		RSV2		= false;
+		RSV3		= false;
+		opcode		= 0;
+		masked		= false;
+		mask		= 0;
+		payloadSize	= -1;
+		payload.clear();
 	}
 	
 	/**

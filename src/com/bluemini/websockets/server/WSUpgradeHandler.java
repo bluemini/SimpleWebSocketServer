@@ -66,13 +66,13 @@ public class WSUpgradeHandler {
 				}
 			}
 			
-			System.out.println("Request Path    :"+pathFull);
-			System.out.println("Query String    :"+queryDetails);
+			// System.out.println("Request Path    :"+pathFull);
+			// System.out.println("Query String    :"+queryDetails);
 			Enumeration en = headers.keys();
 			while (en.hasMoreElements())
 			{
 				String key = (String) en.nextElement();
-				System.out.println("Request headers :"+key+" :: "+headers.getProperty(key));
+				// System.out.println("Request headers :"+key+" :: "+headers.getProperty(key));
 			}
 		}
 		catch (IOException ioe)
@@ -169,16 +169,14 @@ public class WSUpgradeHandler {
 	{
 		try
 		{
-			System.out.println("Incoming key: " + key);
 			byte[] value = WSUpgradeHandler.hashString(key + WSUpgradeHandler.WSGUID);
 			BASE64Encoder enc = new BASE64Encoder();
 			String encoded = enc.encode(value);
-			System.out.println("Encoded string: " + encoded);
 			return encoded;
 		}
 		catch (Exception e)
 		{
-			System.out.println(e.getMessage());
+			System.out.println("ERROR:"+e.getMessage());
 			return e.getMessage();
 		}
 	}

@@ -50,6 +50,16 @@ public class Server implements Runnable {
 					try {
 						if (connections.contains(remote)) {
 							WSRequest request = processWSRequest(in);
+							// System.out.println("Received: "+request.)
+							
+							sendResponse(request.response.getResponse(), socket);
+							System.out.println(new String(request.response.getResponse()));
+
+							if (request.closing)
+							{
+								System.out.println("Closing WebSocket");
+								break;
+							}
 						} else {
 							BufferedReader br = new BufferedReader(new InputStreamReader(in));
 							response = startSession(br);
@@ -133,6 +143,12 @@ public class Server implements Runnable {
 	private void sendResponse(String responseBody, Socket socket) throws IOException {
 		BufferedOutputStream bos = new BufferedOutputStream(socket.getOutputStream());
 		bos.write(responseBody.getBytes());
+		bos.flush();
+	}
+	
+	private void sendResponse(byte[] responseBody, Socket socket) throws IOException {
+		BufferedOutputStream bos = new BufferedOutputStream(socket.getOutputStream());
+		bos.write(responseBody);
 		bos.flush();
 	}
 	
