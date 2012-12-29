@@ -12,9 +12,16 @@ asked.
 
 Still a lot to do, but it's been fun.
 
+
 Running it
 ----------
 
 To run it, start com.bluemini.websocket.SimpleServer
 
 For Windows users, there's a startWSServer.bat to help
+
+
+Other Stuff
+-----------
+
+Working from RFC 6455 (http://tools.ietf.org/html/rfc6455)
