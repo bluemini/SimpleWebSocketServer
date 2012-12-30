@@ -55,6 +55,7 @@ public class WSUpgradeHandler {
 	private StringBuilder body;
 	
 	private Boolean isUpgrade = null;
+	public String failureReason = "";
 	
 	public static final String WSGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 	
@@ -105,7 +106,6 @@ public class WSUpgradeHandler {
 	/**
 	 * converts the request into a path and a querystring. These are then fed into
 	 * an HttpRequest object.
-	 * TODO: process more than just GET requests 
 	 * @param request
 	 */
 	private void parseFirstLine(String request)
@@ -144,7 +144,7 @@ public class WSUpgradeHandler {
 		queryDetails = query;
 	}
 	
-	public boolean isUpgradeRequest(HashSet<String> Hosts)
+	public boolean isUpgradeRequest(Server server)
 	{
 		if (isUpgrade != null)
 		{
@@ -153,35 +153,29 @@ public class WSUpgradeHandler {
 		isUpgrade = false;
 		
 		// check all WebSocket upgrade headers are set and appropriate
-		if ((headers.containsKey("Origin") && Hosts.contains(headers.get("Origin")))
-				|| Hosts.contains("*"))
+		if (headers.containsKey("Upgrade") &&
+				headers.containsKey("Origin") &&
+				headers.containsKey("Sec-WebSocket-Key") &&
+				// TODO: handle the protocol header..
+				/* headers.containsKey("Sec-WebSocket-Protocol") && */
+				headers.containsKey("Sec-WebSocket-Version") &&
+				headers.containsKey("Connection") )
 		{
-			if (headers.containsKey("Upgrade") &&
-					headers.containsKey("Sec-WebSocket-Key") &&
-					// TODO: handle the protocol header..
-					/* headers.containsKey("Sec-WebSocket-Protocol") && */
-					headers.containsKey("Sec-WebSocket-Version") &&
-					headers.containsKey("Connection") )
+			if (headers.getProperty("Upgrade").equals("websocket") &&
+					headers.get("Sec-WebSocket-Version").equals("13") &&
+					headers.getProperty("Connection").contains("Upgrade") &&
+					server.hasHost((String) headers.get("Origin")))
 			{
-				if (headers.getProperty("Upgrade").equals("websocket") &&
-						headers.get("Sec-WebSocket-Version").equals("13") &&
-						headers.getProperty("Connection").contains("Upgrade"))
-				{
-					isUpgrade = true;
-				}
-				else
-				{
-					System.out.println("Unable to find Upgrade==websocket and Connection==Upgrade");
-				}
+				isUpgrade = true;
 			}
 			else
 			{
-				System.out.println("All requisite headers not found");
+				failureReason = "Unable to find Upgrade==websocket, Connection==Upgrade, Version==13, Origin allowed";
 			}
 		}
 		else
 		{
-			System.out.println("Unaccepted Origin:" + headers.get("Origin"));
+			failureReason = "All requisite headers not found";
 		}
 		return isUpgrade;
 	}
@@ -218,7 +212,8 @@ public class WSUpgradeHandler {
 			throws NoSuchAlgorithmException, UnsupportedEncodingException
 	{
 		MessageDigest md = MessageDigest.getInstance("SHA-1");
-		byte[] hashed = md.digest(toHash.getBytes("iso-8859-1"));
+		// byte[] hashed = md.digest(toHash.getBytes("iso-8859-1"));
+		byte[] hashed = md.digest(toHash.getBytes("UTF-8"));
 		return hashed;
 	}
 	
@@ -243,6 +238,11 @@ public class WSUpgradeHandler {
 			}
 		}
 		return p;
+	}
+	
+	public String getFailure()
+	{
+		return failureReason;
 	}
 
 	public void addDynamic(String var)

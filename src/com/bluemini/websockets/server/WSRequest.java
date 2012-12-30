@@ -28,15 +28,23 @@
  */
 package com.bluemini.websockets.server;
 
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
+import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.Properties;
 
 
 public class WSRequest
+implements Runnable
 {
+	private final InputStream in;
+	private final Server server;
+	private final Socket socket;
 	
 	private boolean FIN			= false;
 	private boolean RSV1		= false;
@@ -65,7 +73,15 @@ public class WSRequest
 	 * for a connection upgrade. These should all be called statically.
 	 * @param request
 	 */
-	public WSRequest(InputStream request)
+	public WSRequest(Server server, InputStream request, Socket socket)
+	{
+		this.server = server;
+		this.in = request;
+		this.socket = socket;
+	}
+	
+	@Override
+	public void run()
 	{
 		resetFlags();
 		String line;
@@ -73,90 +89,132 @@ public class WSRequest
 		byte[] buff = new byte[1024];
 		long bytesLeft = 0;
 		
+		// attempt to start a WebSocket session
 		try
 		{
-			// get the first byte
-			setStatus(request.read());
-			
-			// figure out the payload length
-			setPayload(request);
-			
-			// read in the rest..if the payload is non-zero
-			if (payloadSize > 0)
+			BufferedReader br = new BufferedReader(new InputStreamReader(in));
+			String responseString = startSession(br);
+			sendResponse(responseString, socket);
+			// connections.add(remote);
+		}
+		catch (Exception e)
+		{
+			System.out.println(e.getMessage());
+			return;
+		}
+
+		while(true)
+		{
+			try
 			{
-				// figure out the masking
-				if (masked)
-				{
-					mask = 0;
-					for (int i=4; i>0; i--)
-					{
-						mask += request.read() << ((i-1)*8);
-					}
-					System.out.println("Mask: "+mask);
-				}
+				// get the first byte
+				setStatus(in.read());
 				
-				do
+				// figure out the payload length
+				setPayload(in);
+				
+				// read in the rest..if the payload is non-zero
+				if (payloadSize > 0)
 				{
-					int bytesRead = request.read(buff);
-					
-					if (bytesRead >= 0)
+					// figure out the masking
+					if (masked)
 					{
-						bytesLeft = payloadSize-bytesRead;
-						System.out.println("read bytes: " + bytesRead + ", to read: " + bytesLeft);
+						mask = 0;
+						for (int i=4; i>0; i--)
+						{
+							mask += in.read() << ((i-1)*8);
+						}
+						System.out.println("Mask: "+mask);
+					}
+					
+					do
+					{
+						int bytesRead = in.read(buff);
 						
-						// unmask the data (if masked)
-						if (masked && bytesRead > 0)
+						if (bytesRead >= 0)
 						{
-							buff = unmask(buff, bytesRead, mask);
+							bytesLeft = payloadSize-bytesRead;
+							System.out.println("read bytes: " + bytesRead + ", to read: " + bytesLeft);
+							
+							// unmask the data (if masked)
+							if (masked && bytesRead > 0)
+							{
+								buff = unmask(buff, bytesRead, mask);
+							}
+	
+							// copy data to payload
+							for (int i=0; i<bytesRead; i++)
+							{
+								payload.add(buff[i]);
+							}
 						}
-
-						// copy data to payload
-						for (int i=0; i<bytesRead; i++)
+						else
 						{
-							payload.add(buff[i]);
+							bytesLeft = 0;
 						}
-					}
-					else
-					{
-						bytesLeft = 0;
-					}
-					
-				} while (bytesLeft > 0);
+						
+					} while (bytesLeft > 0);
+				}
+			} catch (IOException ioe) {
+				// anything
+				System.out.println("ERROR: " + ioe.getMessage());
 			}
-		} catch (IOException ioe) {
-			// anything
-			System.out.println("ERROR: " + ioe.getMessage());
+			
+			// show the message
+			Iterator<Byte> messageIter = payload.iterator();
+			byte[] b = new byte[payload.size()];
+			int c = 0;
+			while (messageIter.hasNext())
+			{
+				b[c] = (byte) messageIter.next();
+				c += 1;
+			}
+			
+			// display the payload in the output
+			try
+			{
+				System.out.println(new String(b, "UTF-8"));
+			}
+			catch (UnsupportedEncodingException uee)
+			{
+				System.out.println("Unable to convert payload to UTF8, showing in local charset encoding: " + new String(b));
+			}
+			
+			// if the opcode is 8, then we're closing
+			if (opcode == this.OPCODE_CONNECTION_CLOSE)
+			{
+				closing = true;
+				response = new WSResponse(opcode, "");
+				System.out.println("Final frame, closing connection");
+			}
+			else
+			{
+				response = new WSResponse(1, "this is a response");
+				System.out.println("Sending a response");
+			}
+	
+			// if this is the last frame, reset
+			if (FIN) {
+				System.out.println("Reset all flags as we've received the last frame.");
+				resetFlags();
+			}
+
+			// System.out.println("Received: "+request.)
+			try
+			{
+				sendResponse(response.getResponse(), socket);
+				System.out.println(new String(response.getResponse()));
+			}
+			catch (IOException ioe)
+			{}
+			
+			if (closing)
+			{
+				System.out.println("Closing WebSocket");
+				break;
+			}
 		}
 		
-		Iterator<Byte> messageIter = payload.iterator();
-		byte[] b = new byte[payload.size()];
-		int c = 0;
-		while (messageIter.hasNext())
-		{
-			b[c] = (byte) messageIter.next();
-			c += 1;
-		}
-		System.out.println(new String(b));
-		
-		// if the opcode is 8, then we're closing
-		if (opcode == this.OPCODE_CONNECTION_CLOSE)
-		{
-			closing = true;
-			response = new WSResponse(opcode, "");
-			System.out.println("Final frame, closing connection");
-		}
-		else
-		{
-			response = new WSResponse(1, "this is a response");
-			System.out.println("Sending a response");
-		}
-
-		// if this is the last frame, reset
-		if (FIN) {
-			System.out.println("Reset all flags as we've received the last frame.");
-			resetFlags();
-		}
-
 	}
 	
 	/**
@@ -226,6 +284,45 @@ public class WSRequest
 		}
 		
 		return message;
+	}
+	
+	/**
+	 * Starts a new WebSocket session by upgrading to the web socket
+	 */
+	private String startSession(BufferedReader br)
+	throws Exception
+	{
+		WSUpgradeHandler upgradeHandler = new WSUpgradeHandler(br);
+		if (upgradeHandler.isUpgradeRequest(this.server) ) {
+			// generate upgrade response
+			StringBuilder resp = new StringBuilder();
+			resp.append("HTTP/1.1 101 Switching Protocols\n");
+			resp.append("Upgrade: websocket\n");
+			resp.append("Connection: Upgrade\n");
+			resp.append("Sec-WebSocket-Accept: " + upgradeHandler.getAcceptKey() + "\n");
+			resp.append("\n");
+			return resp.toString();
+		} else {
+			throw new Exception("Connection upgrade disallowed. Reason: " + upgradeHandler.getFailure());
+		}
+	}
+	
+	/***
+	 * We take a responseBody (String or byte[]) and push it out through the provided socket
+	 * @param responseBody
+	 * @param socket
+	 * @throws IOException
+	 */
+	private void sendResponse(String responseBody, Socket socket) throws IOException {
+		BufferedOutputStream bos = new BufferedOutputStream(socket.getOutputStream());
+		bos.write(responseBody.getBytes());
+		bos.flush();
+	}
+	
+	private void sendResponse(byte[] responseBody, Socket socket) throws IOException {
+		BufferedOutputStream bos = new BufferedOutputStream(socket.getOutputStream());
+		bos.write(responseBody);
+		bos.flush();
 	}
 	
 	/**

@@ -69,9 +69,12 @@ public class Server implements Runnable {
 		Socket socket = null;
 		
 		// set up the HTTP server to listen for connections..
-		try {
+		try
+		{
 			server = new ServerSocket(listenPort);
-		} catch (Exception e) {
+		}
+		catch (Exception e)
+		{
 			System.out.println(e.getMessage());
 			return;
 		}
@@ -82,95 +85,42 @@ public class Server implements Runnable {
 		 * see if we have a matching url to service. 
 		 */
 		while (keepServing) {
-			try {
+			try
+			{
 				socket = server.accept();
 				InputStream in = socket.getInputStream();
 				String response = "";
 				SocketAddress remote = socket.getRemoteSocketAddress();
 				
-				while (true) {
-					if (connections.contains(remote)) {
-						WSRequest request = processWSRequest(in);
-						// System.out.println("Received: "+request.)
-						
-						sendResponse(request.response.getResponse(), socket);
-						System.out.println(new String(request.response.getResponse()));
-
-						if (request.closing)
-						{
-							System.out.println("Closing WebSocket");
-							break;
-						}
-					} else {
-						BufferedReader br = new BufferedReader(new InputStreamReader(in));
-						response = startSession(br);
-						sendResponse(response, socket);
-						connections.add(remote);
-					}
-				}
-				
-			} catch (Exception e) {
+				new WSRequest(this, in, socket).run();
+			}
+			catch (Exception e)
+			{
 				System.out.println("Server Error: "+e.getMessage());
 				return;
-			} finally {
-				if (socket != null) {
-					try {
+			}
+			finally
+			{
+				if (socket != null)
+				{
+					try
+					{
 						socket.close();
-					} catch (Exception e) {}
+					}
+					catch (Exception e)
+					{}
 				}
 			}
 		}
 	}
 	
-	/**
-	 * Starts a new WebSocket session by upgrading to the web socket
-	 */
-	private String startSession(BufferedReader br)
-	throws Exception
+	synchronized public boolean hasHost(String host)
 	{
-		WSUpgradeHandler request = new WSUpgradeHandler(br);
-		String sessionStarted = "Boo-Hoo";
-		if (request.isUpgradeRequest(Hosts) ) {
-			// generate upgrade response
-			StringBuilder resp = new StringBuilder();
-			resp.append("HTTP/1.1 101 Switching Protocols\n");
-			resp.append("Upgrade: websocket\n");
-			resp.append("Connection: Upgrade\n");
-			resp.append("Sec-WebSocket-Accept: " + request.getAcceptKey() + "\n");
-			resp.append("\n");
-			sessionStarted = resp.toString();
-		} else {
-			System.out.println("Not here!");
+		if (Hosts.contains("*") || Hosts.contains(host))
+		{
+			return true;
 		}
-		System.out.println(sessionStarted);
-		return sessionStarted;
-	}
-	
-	/**
-	 * ensures that the data is a WS basic frame and extracts the essential data
-	 */
-	private WSRequest processWSRequest(InputStream in) {
-		WSRequest request = new WSRequest(in);
-		
-		return request;
-	}
-	
-	/***
-	 * We take a responseBody (String or byte[]) and push it out through the provided socket
-	 * @param responseBody
-	 * @param socket
-	 * @throws IOException
-	 */
-	private void sendResponse(String responseBody, Socket socket) throws IOException {
-		BufferedOutputStream bos = new BufferedOutputStream(socket.getOutputStream());
-		bos.write(responseBody.getBytes());
-		bos.flush();
-	}
-	
-	private void sendResponse(byte[] responseBody, Socket socket) throws IOException {
-		BufferedOutputStream bos = new BufferedOutputStream(socket.getOutputStream());
-		bos.write(responseBody);
-		bos.flush();
+		return false;
 	}
 	
 }
