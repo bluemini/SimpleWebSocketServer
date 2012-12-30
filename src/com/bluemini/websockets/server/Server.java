@@ -33,21 +33,35 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.PrintStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.util.ArrayList;
-import java.util.Properties;
+import java.util.HashSet;
 
 public class Server implements Runnable {
 	
 	private boolean keepServing = true;
-	private PrintStream sys;
 	
-	private int listenPort = 88;
+	private static int defaultPort = 88;
+	private int listenPort;
 	private ArrayList<SocketAddress> connections = new ArrayList<SocketAddress>();
-	private Properties props;
+	private HashSet<String> Hosts = new HashSet<String>();
+	
+	public Server()
+	{
+		this(defaultPort);
+	}
+	
+	public Server(int port)
+	{
+		listenPort = port;
+	}
+	
+	public void setHost(String host)
+	{
+		Hosts.add(host);
+	}
 	
 	@Override
 	public void run() {
@@ -75,33 +89,28 @@ public class Server implements Runnable {
 				SocketAddress remote = socket.getRemoteSocketAddress();
 				
 				while (true) {
-					try {
-						if (connections.contains(remote)) {
-							WSRequest request = processWSRequest(in);
-							// System.out.println("Received: "+request.)
-							
-							sendResponse(request.response.getResponse(), socket);
-							System.out.println(new String(request.response.getResponse()));
+					if (connections.contains(remote)) {
+						WSRequest request = processWSRequest(in);
+						// System.out.println("Received: "+request.)
+						
+						sendResponse(request.response.getResponse(), socket);
+						System.out.println(new String(request.response.getResponse()));
 
-							if (request.closing)
-							{
-								System.out.println("Closing WebSocket");
-								break;
-							}
-						} else {
-							BufferedReader br = new BufferedReader(new InputStreamReader(in));
-							response = startSession(br);
-							sendResponse(response, socket);
-							connections.add(remote);
+						if (request.closing)
+						{
+							System.out.println("Closing WebSocket");
+							break;
 						}
-					} catch (Exception e) {
-						response = "There was an error...";
-						break;
+					} else {
+						BufferedReader br = new BufferedReader(new InputStreamReader(in));
+						response = startSession(br);
+						sendResponse(response, socket);
+						connections.add(remote);
 					}
 				}
 				
 			} catch (Exception e) {
-				System.out.println("HttpServer: "+e.getMessage());
+				System.out.println("Server Error: "+e.getMessage());
 				return;
 			} finally {
 				if (socket != null) {
@@ -114,31 +123,14 @@ public class Server implements Runnable {
 	}
 	
 	/**
-	 * takes the input from the socket and create
-	 * @param br
-	 * @return
-	 */
-	private String echoRequest(BufferedReader br) {
-		String response;
-		
-		try { 
-			response = br.readLine();
-		} catch (Exception e) {
-			response = "Unable to echo request...";
-		}
-		
-		System.out.println("returning response.."+response);
-		return response;
-	}
-	
-	/**
 	 * Starts a new WebSocket session by upgrading to the web socket
 	 */
 	private String startSession(BufferedReader br)
+	throws Exception
 	{
 		WSUpgradeHandler request = new WSUpgradeHandler(br);
 		String sessionStarted = "Boo-Hoo";
-		if (request.isUpgradeRequest() ) {
+		if (request.isUpgradeRequest(Hosts) ) {
 			// generate upgrade response
 			StringBuilder resp = new StringBuilder();
 			resp.append("HTTP/1.1 101 Switching Protocols\n");
@@ -162,8 +154,9 @@ public class Server implements Runnable {
 		
 		return request;
 	}
+	
 	/***
-	 * We take a responseBody (String) and push it out through the provided socket
+	 * We take a responseBody (String or byte[]) and push it out through the provided socket
 	 * @param responseBody
 	 * @param socket
 	 * @throws IOException

@@ -34,7 +34,7 @@ import java.io.UnsupportedEncodingException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -59,6 +59,7 @@ public class WSUpgradeHandler {
 	public static final String WSGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 	
 	public WSUpgradeHandler(BufferedReader request)
+	throws Exception
 	{
 		String line;
 		int read;
@@ -94,22 +95,10 @@ public class WSUpgradeHandler {
 				}
 			}
 			
-			// System.out.println("Request Path    :"+pathFull);
-			// System.out.println("Query String    :"+queryDetails);
-			Enumeration en = headers.keys();
-			while (en.hasMoreElements())
-			{
-				String key = (String) en.nextElement();
-				// System.out.println("Request headers :"+key+" :: "+headers.getProperty(key));
-			}
 		}
 		catch (IOException ioe)
 		{
 			// anything
-		}
-		catch (Exception e)
-		{
-			// anything else
 		}
 	}
 	
@@ -120,18 +109,18 @@ public class WSUpgradeHandler {
 	 * @param request
 	 */
 	private void parseFirstLine(String request)
+	throws Exception
 	{
 		String path = "";
 		Properties query = new Properties();
 		
-		Pattern p = Pattern.compile("^(GET|POST|PUT)[ ]+/([^ ]*)[ ]+HTTP/1\\.([01])$");
+		Pattern p = Pattern.compile("^(GET)[ ]+/([^ ]*)[ ]+HTTP/1\\.1$");
 		Matcher m = p.matcher(request);
 
 		if (m.find())
 		{
 			method = request.substring(m.start(1), m.end(1));
 			String uri = request.substring(m.start(2), m.end(2));
-			method = "1."+request.substring(m.start(3), m.end(3));
 
 			System.out.println("URI: "+uri);
 			int divider = uri.indexOf("?");
@@ -145,13 +134,17 @@ public class WSUpgradeHandler {
 				path = uri;
 			}
 		}
+		else
+		{
+			throw new Exception("A WebSocket connection MUST use GET and HTTP/1.1");
+		}
 		
 		pathFull = path;
 		pathDetails = path.split("/");
 		queryDetails = query;
 	}
 	
-	public boolean isUpgradeRequest()
+	public boolean isUpgradeRequest(HashSet<String> Hosts)
 	{
 		if (isUpgrade != null)
 		{
@@ -160,26 +153,35 @@ public class WSUpgradeHandler {
 		isUpgrade = false;
 		
 		// check all WebSocket upgrade headers are set and appropriate
-		if (headers.containsKey("Upgrade") &&
-				headers.containsKey("Sec-WebSocket-Key") &&
-				// TODO: handle the protocol header..
-				/* headers.containsKey("Sec-WebSocket-Protocol") && */
-				headers.containsKey("Sec-WebSocket-Version") &&
-				headers.containsKey("Connection") )
+		if ((headers.containsKey("Origin") && Hosts.contains(headers.get("Origin")))
+				|| Hosts.contains("*"))
 		{
-			if (headers.getProperty("Upgrade").equals("websocket") &&
-					headers.getProperty("Connection").contains("Upgrade"))
+			if (headers.containsKey("Upgrade") &&
+					headers.containsKey("Sec-WebSocket-Key") &&
+					// TODO: handle the protocol header..
+					/* headers.containsKey("Sec-WebSocket-Protocol") && */
+					headers.containsKey("Sec-WebSocket-Version") &&
+					headers.containsKey("Connection") )
 			{
-				isUpgrade = true;
+				if (headers.getProperty("Upgrade").equals("websocket") &&
+						headers.get("Sec-WebSocket-Version").equals("13") &&
+						headers.getProperty("Connection").contains("Upgrade"))
+				{
+					isUpgrade = true;
+				}
+				else
+				{
+					System.out.println("Unable to find Upgrade==websocket and Connection==Upgrade");
+				}
 			}
 			else
 			{
-				System.out.println("Unable to find Upgrade==websocket and Connection==Upgrade");
+				System.out.println("All requisite headers not found");
 			}
 		}
 		else
 		{
-			System.out.println("All requisite headers not found");
+			System.out.println("Unaccepted Origin:" + headers.get("Origin"));
 		}
 		return isUpgrade;
 	}

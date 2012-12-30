@@ -36,7 +36,9 @@ public class SimpleServer {
 	 * @param args
 	 */
 	public static void main(String[] args) {
-		new Thread(new Server(), "WebSocketServer").start();
+		Server s = new Server();
+		s.setHost("*");
+		new Thread(s, "WebSocketServer").start();
 	}
 
 }
