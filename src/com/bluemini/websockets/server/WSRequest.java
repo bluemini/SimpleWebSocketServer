@@ -103,6 +103,7 @@ implements Runnable
 			return;
 		}
 
+		// the main connection loop waits for input
 		while(true)
 		{
 			try
@@ -160,32 +161,12 @@ implements Runnable
 				System.out.println("ERROR: " + ioe.getMessage());
 			}
 			
-			// show the message
-			Iterator<Byte> messageIter = payload.iterator();
-			byte[] b = new byte[payload.size()];
-			int c = 0;
-			while (messageIter.hasNext())
-			{
-				b[c] = (byte) messageIter.next();
-				c += 1;
-			}
-			
-			// display the payload in the output
-			try
-			{
-				System.out.println(new String(b, "UTF-8"));
-			}
-			catch (UnsupportedEncodingException uee)
-			{
-				System.out.println("Unable to convert payload to UTF8, showing in local charset encoding: " + new String(b));
-			}
-			
 			// if the opcode is 8, then we're closing
 			if (opcode == this.OPCODE_CONNECTION_CLOSE)
 			{
+				System.out.println("Received request to close the connection. Returning closing frame");
 				closing = true;
-				response = new WSResponse(opcode, "");
-				System.out.println("Final frame, closing connection");
+				response = new WSResponse(this.OPCODE_CONNECTION_CLOSE, "");
 			}
 			else
 			{
@@ -193,13 +174,13 @@ implements Runnable
 				System.out.println("Sending a response");
 			}
 	
-			// if this is the last frame, reset
+			// if this is the last frame, reset flags for new message
 			if (FIN) {
-				System.out.println("Reset all flags as we've received the last frame.");
+				System.out.println("Reset all flags as we've received the last frame of the current message.");
 				resetFlags();
 			}
 
-			// System.out.println("Received: "+request.)
+			// return the response to the client
 			try
 			{
 				sendResponse(response.getResponse(), socket);
