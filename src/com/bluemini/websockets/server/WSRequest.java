@@ -86,14 +86,11 @@ implements Runnable
 		resetFlags();
 		String line;
 		int read;
-		byte[] buff = new byte[1024];
-		long bytesLeft = 0;
 		
 		// attempt to start a WebSocket session
 		try
 		{
-			BufferedReader br = new BufferedReader(new InputStreamReader(in));
-			String responseString = startSession(br);
+			String responseString = startSession(in);
 			sendResponse(responseString, socket);
 			// connections.add(remote);
 		}
@@ -108,94 +105,104 @@ implements Runnable
 		{
 			try
 			{
-				// get the first byte
-				setStatus(in.read());
+				parseFrame();
 				
-				// figure out the payload length
-				setPayload(in);
+				prepareResponse();
 				
-				// read in the rest..if the payload is non-zero
-				if (payloadSize > 0)
-				{
-					// figure out the masking
-					if (masked)
-					{
-						mask = 0;
-						for (int i=4; i>0; i--)
-						{
-							mask += in.read() << ((i-1)*8);
-						}
-						System.out.println("Mask: "+mask);
-					}
-					
-					do
-					{
-						int bytesRead = in.read(buff);
-						
-						if (bytesRead >= 0)
-						{
-							bytesLeft = payloadSize-bytesRead;
-							System.out.println("read bytes: " + bytesRead + ", to read: " + bytesLeft);
-							
-							// unmask the data (if masked)
-							if (masked && bytesRead > 0)
-							{
-								buff = unmask(buff, bytesRead, mask);
-							}
-	
-							// copy data to payload
-							for (int i=0; i<bytesRead; i++)
-							{
-								payload.add(buff[i]);
-							}
-						}
-						else
-						{
-							bytesLeft = 0;
-						}
-						
-					} while (bytesLeft > 0);
+				// if this is the last frame, reset flags for new message
+				if (FIN) {
+					System.out.println("Reset all flags as we've received the last frame of the current message.");
+					resetFlags();
 				}
-			} catch (IOException ioe) {
+
+				sendResponse(response.getResponse(), socket);
+				System.out.println(new String(response.getResponse()));
+
+				if (closing)
+				{
+					System.out.println("Closing WebSocket");
+					break;
+				}
+			}
+			catch (IOException ioe)
+			{
 				// anything
 				System.out.println("ERROR: " + ioe.getMessage());
 			}
-			
-			// if the opcode is 8, then we're closing
-			if (opcode == this.OPCODE_CONNECTION_CLOSE)
-			{
-				System.out.println("Received request to close the connection. Returning closing frame");
-				closing = true;
-				response = new WSResponse(this.OPCODE_CONNECTION_CLOSE, "");
-			}
-			else
-			{
-				response = new WSResponse(1, "this is a response");
-				System.out.println("Sending a response");
-			}
-	
-			// if this is the last frame, reset flags for new message
-			if (FIN) {
-				System.out.println("Reset all flags as we've received the last frame of the current message.");
-				resetFlags();
-			}
-
-			// return the response to the client
-			try
-			{
-				sendResponse(response.getResponse(), socket);
-				System.out.println(new String(response.getResponse()));
-			}
-			catch (IOException ioe)
-			{}
-			
-			if (closing)
-			{
-				System.out.println("Closing WebSocket");
-				break;
-			}
 		}
 		
+	}
+	
+	private void parseFrame()
+	throws IOException
+	{
+		byte[] buff = new byte[1024];
+		long bytesLeft = 0;
+
+		// get the first byte
+		setStatus(in.read());
+		
+		// figure out the payload length
+		setPayload(in);
+		
+		// read in the rest..if the payload is non-zero
+		if (payloadSize > 0)
+		{
+			// figure out the masking
+			if (masked)
+			{
+				mask = 0;
+				for (int i=4; i>0; i--)
+				{
+					mask += in.read() << ((i-1)*8);
+				}
+				System.out.println("Mask: "+mask);
+			}
+			
+			do
+			{
+				int bytesRead = in.read(buff);
+				
+				if (bytesRead >= 0)
+				{
+					bytesLeft = payloadSize-bytesRead;
+					System.out.println("read bytes: " + bytesRead + ", to read: " + bytesLeft);
+					
+					// unmask the data (if masked)
+					if (masked && bytesRead > 0)
+					{
+						buff = unmask(buff, bytesRead, mask);
+					}
+
+					// copy data to payload
+					for (int i=0; i<bytesRead; i++)
+					{
+						payload.add(buff[i]);
+					}
+				}
+				else
+				{
+					bytesLeft = 0;
+				}
+				
+			} while (bytesLeft > 0);
+		}
+	}
+	
+	public void prepareResponse()
+	{
+		// if the opcode is 8, then we're closing
+		if (opcode == this.OPCODE_CONNECTION_CLOSE)
+		{
+			System.out.println("Received request to close the connection. Returning closing frame");
+			closing = true;
+			response = new WSResponse(this.OPCODE_CONNECTION_CLOSE, "");
+		}
+		else
+		{
+			response = new WSResponse(1, "this is a response");
+			System.out.println("Sending a response");
+		}
 	}
 	
 	/**
@@ -270,10 +277,10 @@ implements Runnable
 	/**
 	 * Starts a new WebSocket session by upgrading to the web socket
 	 */
-	private String startSession(BufferedReader br)
+	private String startSession(InputStream in)
 	throws Exception
 	{
-		WSUpgradeHandler upgradeHandler = new WSUpgradeHandler(br);
+		WSUpgradeHandler upgradeHandler = new WSUpgradeHandler(new BufferedReader(new InputStreamReader(in)));
 		if (upgradeHandler.isUpgradeRequest(this.server) ) {
 			// generate upgrade response
 			StringBuilder resp = new StringBuilder();
