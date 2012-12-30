@@ -93,17 +93,9 @@ implements Runnable
 			String responseString = startSession(in);
 			sendResponse(responseString, socket);
 			// connections.add(remote);
-		}
-		catch (Exception e)
-		{
-			System.out.println(e.getMessage());
-			return;
-		}
 
-		// the main connection loop waits for input
-		while(true)
-		{
-			try
+			// the main connection loop waits for input
+			while(true)
 			{
 				parseFrame();
 				
@@ -124,11 +116,20 @@ implements Runnable
 					break;
 				}
 			}
-			catch (IOException ioe)
-			{
-				// anything
-				System.out.println("ERROR: " + ioe.getMessage());
-			}
+		}
+		catch (SWSSUpgradeException swssue)
+		{
+			// the HTTP Upgrade failed
+			System.out.println("Upgrade Error: " + swssue.getMessage());
+		}
+		catch (IOException ioe)
+		{
+			// anything
+			System.out.println("ERROR: " + ioe.getMessage());
+		}
+		catch (Exception e)
+		{
+			System.out.println(e.getMessage());
 		}
 		
 	}
