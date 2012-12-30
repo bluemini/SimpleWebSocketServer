@@ -35,6 +35,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.net.Socket;
+import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Iterator;
 
@@ -42,10 +43,10 @@ import java.util.Iterator;
 public class WSRequest
 implements Runnable
 {
-	private final InputStream in;
 	private final Server server;
 	private final Socket socket;
 	
+	private InputStream in;
 	private boolean FIN			= false;
 	private boolean RSV1		= false;
 	private boolean RSV2		= false;
@@ -73,11 +74,11 @@ implements Runnable
 	 * for a connection upgrade. These should all be called statically.
 	 * @param request
 	 */
-	public WSRequest(Server server, InputStream request, Socket socket)
+	public WSRequest(Server server, Socket socket)
 	{
 		this.server = server;
-		this.in = request;
 		this.socket = socket;
+		SocketAddress remote = socket.getRemoteSocketAddress();
 	}
 	
 	@Override
@@ -90,6 +91,8 @@ implements Runnable
 		// attempt to start a WebSocket session
 		try
 		{
+			this.in = this.socket.getInputStream();
+
 			String responseString = startSession(in);
 			sendResponse(responseString, socket);
 			// connections.add(remote);

@@ -88,11 +88,7 @@ public class Server implements Runnable {
 			try
 			{
 				socket = server.accept();
-				InputStream in = socket.getInputStream();
-				String response = "";
-				SocketAddress remote = socket.getRemoteSocketAddress();
-				
-				new WSRequest(this, in, socket).run();
+				new WSRequest(this, socket).run();
 			}
 			catch (Exception e)
 			{
