@@ -291,7 +291,7 @@ implements Runnable
 			resp.append("\n");
 			return resp.toString();
 		} else {
-			throw new Exception("Connection upgrade disallowed. Reason: " + upgradeHandler.getFailure());
+			throw new SWSSUpgradeException("Connection upgrade disallowed. Reason: " + upgradeHandler.getFailure());
 		}
 	}
 	
