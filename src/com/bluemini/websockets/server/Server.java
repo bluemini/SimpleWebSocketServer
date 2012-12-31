@@ -28,16 +28,13 @@
  */
 package com.bluemini.websockets.server;
 
-import java.io.BufferedOutputStream;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.HashSet;
+
+import com.bluemini.websockets.handlers.SWSSHandler;
 
 public class Server implements Runnable {
 	
@@ -45,17 +42,19 @@ public class Server implements Runnable {
 	
 	private static int defaultPort = 88;
 	private int listenPort;
+	public SWSSHandler handler;
 	private ArrayList<SocketAddress> connections = new ArrayList<SocketAddress>();
 	private HashSet<String> Hosts = new HashSet<String>();
 	
-	public Server()
+	public Server(SWSSHandler handler)
 	{
-		this(defaultPort);
+		this(defaultPort, handler);
 	}
 	
-	public Server(int port)
+	public Server(int port, SWSSHandler handler)
 	{
 		listenPort = port;
+		this.handler = handler;
 	}
 	
 	public void setHost(String host)

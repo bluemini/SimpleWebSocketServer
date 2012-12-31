@@ -33,11 +33,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.UnsupportedEncodingException;
 import java.net.Socket;
-import java.net.SocketAddress;
 import java.util.ArrayList;
-import java.util.Iterator;
 
 
 public class WSRequest
@@ -47,26 +44,33 @@ implements Runnable
 	private final Socket socket;
 	
 	private InputStream in;
-	private boolean FIN			= false;
-	private boolean RSV1		= false;
-	private boolean RSV2		= false;
-	private boolean RSV3		= false;
-	public boolean closing		= false;
-	private byte opcode			= 0;
-	private boolean masked		= false;
-	private int mask			= 0;
-	private long payloadSize	= -1;
-	private ArrayList<Byte> payload = new ArrayList<Byte>();
-	public WSResponse response	= null;
+	private int FrameCount = 0;
 	
-	private byte OPCODE_CONTINUATION_FRAME	= 0;
-	private byte OPCODE_TEXT_FRAME			= 1;
-	private byte OPCODE_BINARY_FRAME		= 2;
-	private byte OPCODE_CONNECTION_CLOSE	= 8;
-	private byte OPCODE_PING				= 9;
-	private byte OPCODE_PONG				= 10;
+	// Message parameters
+	private boolean FIN						= false;
+	private boolean RSV1					= false;
+	private boolean RSV2					= false;
+	private boolean RSV3					= false;
+	public boolean closing					= false;
+	private byte opcode						= 0;
+	private boolean controlFrame			= false;
+	private boolean masked					= false;
+	private int mask						= 0;
+	private ArrayList<Byte> payload 		= new ArrayList<Byte>();
+	private long payloadSize				= -1;
+	private PayloadType payloadType;
+	public WSResponse response				= null;
 	
-	public static final String WSGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+	public static byte OPCODE_CONTINUATION_FRAME	= 0;
+	public static byte OPCODE_TEXT_FRAME			= 1;
+	public static byte OPCODE_BINARY_FRAME			= 2;
+	public static byte OPCODE_CONNECTION_CLOSE		= 8;
+	public static byte OPCODE_PING					= 9;
+	public static byte OPCODE_PONG					= 10;
+	
+	public static final String WSGUID		= "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+	
+	public static enum PayloadType			{TEXT, BINARY};
 	
 	/**
 	 * The constructor takes an input stream and parses out the meaning. You
@@ -78,47 +82,52 @@ implements Runnable
 	{
 		this.server = server;
 		this.socket = socket;
-		SocketAddress remote = socket.getRemoteSocketAddress();
+		// SocketAddress remote = socket.getRemoteSocketAddress();
 	}
 	
 	@Override
 	public void run()
 	{
 		resetFlags();
-		String line;
-		int read;
 		
-		// attempt to start a WebSocket session
 		try
 		{
 			this.in = this.socket.getInputStream();
 
+			// attempt to start a WebSocket session - failure caught in error handler
 			String responseString = startSession(in);
 			sendResponse(responseString, socket);
-			// connections.add(remote);
 
-			// the main connection loop waits for input
+			// the main connection loop takes the remaining message input
 			while(true)
 			{
+
 				parseFrame();
-				
-				prepareResponse();
-				
-				// if this is the last frame, reset flags for new message
-				if (FIN) {
-					System.out.println("Reset all flags as we've received the last frame of the current message.");
-					resetFlags();
-				}
 
-				sendResponse(response.getResponse(), socket);
-				System.out.println(new String(response.getResponse()));
-
+				// close out of the loop if we are to close the WebSocket
 				if (closing)
 				{
 					System.out.println("Closing WebSocket");
 					break;
 				}
+				
+				// if this is the last frame of the message; return the response and then
+				// reset flags for new message
+				if (FIN) {
+					if (controlFrame)
+					{
+						WSControlHandler.respond(this);
+					}
+					else
+					{
+						respond();
+						System.out.println("Reset all flags as we've received the last frame of the current message.");
+						resetFlags();
+					}
+				}
+
 			}
+			
 		}
 		catch (SWSSUpgradeException swssue)
 		{
@@ -137,8 +146,13 @@ implements Runnable
 		
 	}
 	
+	/**
+	 * Reads in all parts of the frame and builds the message. This will
+	 * assemble multiple frames until the FIN is sent.
+	 * @throws IOException
+	 */
 	private void parseFrame()
-	throws IOException
+	throws IOException, SWSSUnsupportedPayloadType, SWSSIncorrectOpcode
 	{
 		byte[] buff = new byte[1024];
 		long bytesLeft = 0;
@@ -191,22 +205,51 @@ implements Runnable
 				
 			} while (bytesLeft > 0);
 		}
+		
+		if (!controlFrame)
+		{
+			// increment the frame count if its a genuine frame
+			FrameCount += 1;
+			
+			// if this is the first frame, establish the type (binary/text) and if not,
+			// ensure it's a continuation frame
+			if (FrameCount == 1)
+			{
+				if (opcode == WSRequest.OPCODE_BINARY_FRAME)
+				{
+					payloadType = PayloadType.BINARY;
+				}
+				else if (opcode == WSRequest.OPCODE_TEXT_FRAME)
+				{
+					payloadType = PayloadType.TEXT;
+				}
+				else
+				{
+					throw new SWSSUnsupportedPayloadType("Unknown opcode ("+opcode+") for non-control frame received.");
+				}
+			}
+			else
+			{
+				if (opcode != WSRequest.OPCODE_CONTINUATION_FRAME)
+				{
+					throw new SWSSIncorrectOpcode("The opcode for all frames other than the"+
+							" first, must be set to 0 (continuation)");
+				}
+			}
+		}
 	}
 	
-	public void prepareResponse()
+	/**
+	 * Based on the opcode of the incoming frame, we prepare the response.
+	 */
+	public void respond()
+	throws IOException
 	{
-		// if the opcode is 8, then we're closing
-		if (opcode == this.OPCODE_CONNECTION_CLOSE)
-		{
-			System.out.println("Received request to close the connection. Returning closing frame");
-			closing = true;
-			response = new WSResponse(this.OPCODE_CONNECTION_CLOSE, "");
-		}
-		else
-		{
-			response = new WSResponse(1, "this is a response");
-			System.out.println("Sending a response");
-		}
+		response = server.handler.response(this);
+		System.out.println("Sending a response");
+
+		sendResponse(response.getResponse(), socket);
+		System.out.println(new String(response.getResponse()));
 	}
 	
 	/**
@@ -224,8 +267,16 @@ implements Runnable
 			RSV2 = true;
 		if ((status & 16) == 16)
 			RSV3 = true;
-		opcode = (byte) (status & (1+2+4+8));
 		
+		// if the opcode is 8, then we're closing
+		opcode = (byte) (status & (1+2+4+8));
+		if (opcode == WSRequest.OPCODE_CONNECTION_CLOSE)
+		{
+			System.out.println("Received request to close the connection. Returning closing frame");
+			closing = true;
+			response = new WSResponse(WSRequest.OPCODE_CONNECTION_CLOSE, "");
+		}
+
 		System.out.println("Opcode: "+opcode);
 	}
 	
@@ -293,6 +344,7 @@ implements Runnable
 			resp.append("Connection: Upgrade\n");
 			resp.append("Sec-WebSocket-Accept: " + upgradeHandler.getAcceptKey() + "\n");
 			resp.append("\n");
+			System.out.println("Connection established, upgrading to WebSocket");
 			return resp.toString();
 		} else {
 			throw new SWSSUpgradeException("Connection upgrade disallowed. Reason: " + upgradeHandler.getFailure());
@@ -332,6 +384,8 @@ implements Runnable
 		mask		= 0;
 		payloadSize	= -1;
 		payload.clear();
+		payloadType	= null;
+		FrameCount	= 0;
 	}
 	
 	/**
@@ -347,6 +401,17 @@ implements Runnable
 	        (byte) ((a >> 8) & 0xFF),   
 	        (byte) (a & 0xFF)
 	    };
+	}
+	
+	
+	// ACCESSORS
+	public String getMessage()
+	{
+		int numBytes = payload.size();
+		byte[] message = new byte[numBytes];
+		for (int i=0; i<numBytes; i++)
+			message[i] = payload.get(i);
+		return new String(message);
 	}
 
 }

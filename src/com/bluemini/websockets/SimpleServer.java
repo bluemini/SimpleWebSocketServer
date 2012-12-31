@@ -28,6 +28,7 @@
  */
 package com.bluemini.websockets;
 
+import com.bluemini.websockets.handlers.EchoHandler;
 import com.bluemini.websockets.server.Server;
 
 public class SimpleServer {
@@ -36,7 +37,7 @@ public class SimpleServer {
 	 * @param args
 	 */
 	public static void main(String[] args) {
-		Server s = new Server();
+		Server s = new Server(new EchoHandler());
 		s.setHost("*");
 		new Thread(s, "WebSocketServer").start();
 	}
