@@ -21,6 +21,22 @@ To run it, start com.bluemini.websocket.SimpleServer
 For Windows users, there's a startWSServer.bat to help
 
 
+Handlers
+--------
+
+The basic server simply decodes and defragments incoming WebSocket data. To make any of
+this useful you need to do something with the incoming data and respond back to the client
+in some meaningful way. Up until now, that logic was inside the WSRequest object, however,
+now it it possible (in some small and embrionic way) to write your own handler.
+
+The Server constructor now takes a SWSSHandler which implements the 'response' method, 
+taking a WSRequest and returning a WSResponse. SWSSHandler is an abstract class that you
+can extend with your own implementation.
+
+Still much to do to tidy up the API on these objects and provide useful data, but for now
+there is an example EchoHandler that sends back the data you send it.
+
+
 Other Stuff
 -----------
 
