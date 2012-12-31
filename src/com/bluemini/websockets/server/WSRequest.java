@@ -411,7 +411,7 @@ implements Runnable
 		byte[] message = new byte[numBytes];
 		for (int i=0; i<numBytes; i++)
 			message[i] = payload.get(i);
-		return new String(message);
+		return new String(message, "UTF-8");
 	}
 
 }
