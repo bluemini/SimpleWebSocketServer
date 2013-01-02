@@ -33,6 +33,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
 import java.net.Socket;
 import java.util.ArrayList;
 
@@ -154,7 +155,7 @@ implements Runnable
 	private void parseFrame()
 	throws IOException, SWSSUnsupportedPayloadType, SWSSIncorrectOpcode
 	{
-		byte[] buff = new byte[1024];
+		byte[] buff;
 		long bytesLeft = 0;
 
 		// get the first byte
@@ -176,14 +177,23 @@ implements Runnable
 				}
 				System.out.println("Mask: "+mask);
 			}
+			bytesLeft = payloadSize;
 			
 			do
 			{
+			    
+			    int defBuff = 1024;
+			    if (payloadSize < defBuff)
+			    {
+			        defBuff = (int) payloadSize;
+			    }
+			    buff = new byte[defBuff];
+			    
 				int bytesRead = in.read(buff);
 				
 				if (bytesRead >= 0)
 				{
-					bytesLeft = payloadSize-bytesRead;
+					bytesLeft = bytesLeft-bytesRead;
 					System.out.println("read bytes: " + bytesRead + ", to read: " + bytesLeft);
 					
 					// unmask the data (if masked)
@@ -276,6 +286,15 @@ implements Runnable
 			closing = true;
 			response = new WSResponse(WSRequest.OPCODE_CONNECTION_CLOSE, "");
 		}
+		
+		if (opcode >= 8)
+		{
+		    controlFrame = true;
+		}
+		else
+		{
+		    controlFrame = false;
+		}
 
 		System.out.println("Opcode: "+opcode);
 	}
@@ -295,19 +314,20 @@ implements Runnable
 			masked = true;
 		
 		// then get the intial payload size value
-		payloadSize = payloadHeader & 127;
+		payloadSize = ((long) payloadHeader) & 127;
 		
 		// if the payload size is bigger than 125, we need to parse it in..
 		if (payloadSize == 126) // 126 means the length is contained in the next 2 bytes
 		{
-			payloadSize = request.read() << 8 + request.read();
+			payloadSize = (request.read() << 8) + (request.read());
 		}
 		else if (payloadSize == 127) // 127 means the length is in the next 8 bytes
 		{
 			payloadSize = 0;
 			for (int i=0; i<8; i++)
 			{
-				payloadSize += request.read() << i;
+			    long readIn = request.read();
+				payloadSize += readIn << (i*8);
 			}
 		}
 		
@@ -339,11 +359,11 @@ implements Runnable
 		if (upgradeHandler.isUpgradeRequest(this.server) ) {
 			// generate upgrade response
 			StringBuilder resp = new StringBuilder();
-			resp.append("HTTP/1.1 101 Switching Protocols\n");
-			resp.append("Upgrade: websocket\n");
-			resp.append("Connection: Upgrade\n");
-			resp.append("Sec-WebSocket-Accept: " + upgradeHandler.getAcceptKey() + "\n");
-			resp.append("\n");
+			resp.append("HTTP/1.1 101 Switching Protocols\r\n");
+			resp.append("Upgrade: websocket\r\n");
+			resp.append("Connection: Upgrade\r\n");
+			resp.append("Sec-WebSocket-Accept: " + upgradeHandler.getAcceptKey() + "\r\n");
+			resp.append("\r\n");
 			System.out.println("Connection established, upgrading to WebSocket");
 			return resp.toString();
 		} else {
@@ -411,7 +431,16 @@ implements Runnable
 		byte[] message = new byte[numBytes];
 		for (int i=0; i<numBytes; i++)
 			message[i] = payload.get(i);
-		return new String(message, "UTF-8");
+		String encodedMessage = message.toString();
+		try
+		{
+		    encodedMessage = new String(message, "UTF-8"); 
+		}
+		catch (UnsupportedEncodingException uee)
+		{
+		    System.out.println("Unable to decode byte array, using platform default encoding..");
+		}
+		return encodedMessage;
 	}
 
 }
