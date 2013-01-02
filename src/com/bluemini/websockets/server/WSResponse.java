@@ -28,6 +28,8 @@
  */
 package com.bluemini.websockets.server;
 
+import java.io.UnsupportedEncodingException;
+
 public class WSResponse {
 	
 	private byte[] response;
@@ -48,7 +50,6 @@ public class WSResponse {
 	{
 		this.message = message;
 		this.opcode = (byte) opcode;
-		this.payloadSize = message.length();
 		if (this.opcode == 8)
 			this.closing = true;
 		this.FIN = true;
@@ -61,35 +62,66 @@ public class WSResponse {
 	
 	private void serialiseResponse()
 	{
-		byte[] tBuff = new byte[1024];
+		byte[] responseHeader = new byte[2];
+		byte[] responsePayload;
 		
 		// set the bits for the first byte
-		tBuff[0] = 0;
+		responseHeader[0] = 0;
+        responseHeader[1] = 0;
 		if (FIN)
-			tBuff[0] = (byte) (tBuff[0] | (byte) (1 << 7) );
+		    responseHeader[0] = (byte) (responseHeader[0] | (byte) (1 << 7) );
 		if (RSV1)
-			tBuff[0] = (byte) (tBuff[0] | (byte) (1 << 6) );
+		    responseHeader[0] = (byte) (responseHeader[0] | (byte) (1 << 6) );
 		if (RSV2)
-			tBuff[0] = (byte) (tBuff[0] | (byte) (1 << 5) );
+		    responseHeader[0] = (byte) (responseHeader[0] | (byte) (1 << 5) );
 		if (RSV3)
-			tBuff[0] = (byte) (tBuff[0] | (byte) (1 << 4) );
-		tBuff[0] = (byte) (tBuff[0] | (byte) (opcode) );
+		    responseHeader[0] = (byte) (responseHeader[0] | (byte) (1 << 4) );
+		responseHeader[0] = (byte) (responseHeader[0] | (byte) (opcode) );
 		
-		// set the payload length
-		if (payloadSize <= 125)
-		{
-			tBuff[1] = (byte) payloadSize;
-			for (int i=0; i<payloadSize; i++)
-			{
-				tBuff[i+2] = (byte) (message.charAt(i));
-				// System.out.println("setting tBuff " + (i+2) + message.charAt(i));
-			}
+		try {
+		    byte[] responseMessage = message.getBytes("UTF-8");
+		    payloadSize = responseMessage.length;
+		
+    		// set the payload length
+    		if (payloadSize <= 125)
+    		{
+    		    responseHeader[1] = (byte) payloadSize;
+    		    responsePayload = new byte[0];
+    		}
+    		else if (payloadSize <= 65535)
+    		{
+    		    responseHeader[1] = (byte) 126;
+    		    responsePayload = new byte[2];
+    		    responsePayload[0] = (byte) (payloadSize >> 8);
+    		    responsePayload[1] = (byte) (payloadSize | 255);
+    		}
+    		else
+    		{
+    		    responsePayload = new byte[0];
+    		}
+		
+    		response = new byte[(int) (2 + responsePayload.length + responseMessage.length)];
+    		for (int i=0; i<2; i++)
+    		{
+    			response[i] = responseHeader[i];
+    		}
+    		
+    		// append
+    		int i;
+    		for (i=0; i<responsePayload.length; i++)
+    		{
+    		    response[2+i] = responsePayload[i];
+    		}
+    		int payloadStart = 2 + responsePayload.length;
+    		
+    		for (i=0; i<responseMessage.length; i++)
+    		{
+    		    response[payloadStart + i] = responseMessage[i];
+    		}
 		}
-		
-		response = new byte[(int) (payloadSize + 2)];
-		for (int i=0; i<(payloadSize+2); i++)
+		catch (UnsupportedEncodingException uee)
 		{
-			response[i] = tBuff[i];
+		    System.out.println("Unable to encode the message..");
 		}
 	}
 
