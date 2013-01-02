@@ -7,7 +7,8 @@ public class EchoHandler extends SWSSHandler {
 	
 	public WSResponse response(WSRequest request)
 	{
-		return new WSResponse(WSRequest.OPCODE_TEXT_FRAME, request.getMessage());		
+	    String mess = request.getMessage();
+		return new WSResponse(WSRequest.OPCODE_TEXT_FRAME, mess);
 	}
 
 }
