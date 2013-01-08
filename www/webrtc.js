@@ -107,7 +107,7 @@
 				
 				if (!signalingChannel) {
 					signalingChannel = new WebSocket('ws://'+WSServer+':88/');
-					setStatus("connecting...");
+					console.log("connecting...");
 				}
 
 				if (signalingChannel) {
@@ -143,27 +143,27 @@
 					    	console.log("signal received from callee with type: " + signal.type);
 					    
 					    } else {
-					    	console.log("Unknown response from RTC server...follows" + signal);
+					    	console.log("Unknown response from RTC server..." + signal);
 					    }
 					};
 					
 					// inform the UI
 					signalingChannel.onopen = function(evt) {
-						setStatus("websocket connection open");
+						console.log("websocket connection open");
 						login();
 						getUsers();
 					}
 					
 					// inform the UI
 					signalingChannel.onerror = function(evt) {
-						setStatus("websocket connection failed");
+						console.log("websocket connection failed");
 						console.log(evt);
 						// alert("failed to connect to the websocket" + evt.toString());
 					}
 					
 					// inform the UI
 					signalingChannel.onclose = function(evt) {
-						setStatus("websocket connection closed");
+						console.log("websocket connection closed");
 						selfView.src = "";
 						signalingChannel = null;
 					}
