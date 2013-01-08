@@ -48,10 +48,10 @@
 	        pc.addStream(stream);
 	        console.log("Adding stream to PC");
 
-	        if (isCaller) {
+	        if (isCaller) { // getting hold of video on the caller, we can produce an offer
 	        	console.log("Creating an offer to the callee");
 	            pc.createOffer(gotDescription, null);
-	        } else {
+	        } else { // getting hold of video on the receiver allows us to answer an offer 
 	    		console.log("Creating answer");
 	    		pc.createAnswer(gotDescription, null);
 	        }
@@ -114,15 +114,15 @@
 					signalingChannel.onmessage = function (evt) {
 	
 					    var signal = JSON.parse(evt.data);
-					    // console.log(signal);
+
 					    if (signal.sdp) {
 							if (!pc)
 						        start(false);
-							console.log("setting remote description");
+							console.log("Received SDP, setting remote description");
 					    	pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
 
 					    } else if (signal.users) {
-					    	setStatus("got some users..." + evt.data);
+					    	console.log("Received some users..." + evt.data);
 					    	renderUsers(signal.users);
 
 					    } else if (signal.candidate) {
@@ -137,16 +137,13 @@
 
 					    } else if (signal.hasOwnProperty("sessionstarted")) {
 					    	console.log("Server has 'joined' us with the callee, session started, begin comms");
-					    	setStatus("Session started");
 					    	start(true);
 					    
 					    } else if (signal.type) {
 					    	console.log("signal received from callee with type: " + signal.type);
 					    
 					    } else {
-					    	setStatus("Bad response from RTC server");
-					    	console.log("Unknown response from RTC server...follows")
-					    	console.log(signal);
+					    	console.log("Unknown response from RTC server...follows" + signal);
 					    }
 					};
 					
@@ -161,7 +158,7 @@
 					signalingChannel.onerror = function(evt) {
 						setStatus("websocket connection failed");
 						console.log(evt);
-						// alert("failed to connect to the webscoket" + evt.toString());
+						// alert("failed to connect to the websocket" + evt.toString());
 					}
 					
 					// inform the UI
