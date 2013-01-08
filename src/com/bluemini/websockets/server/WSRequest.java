@@ -151,7 +151,7 @@ implements Runnable
 			System.out.println(e.getMessage());
 		}
 		
-		System.out.println("Shutting down the server");
+		System.out.println("Shutting down the request");
 		
 	}
 	
