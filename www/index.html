@@ -7,7 +7,21 @@
 <body>
 
 	<h2>WebSocket Test</h2>
-	<video id="video"></video>
-
+	<video id="video" style="width:240px; height:180px"></video>
+	<video id="remote" style="width:240px; height:180px"></video>
+	
+	<div>
+		<div id="status"></div>
+		<fieldset>
+			<label for="name">Username</label><input type="text" name="name" id="name" value=""><br>
+			<label for="nick">Nick-name</label><input type="text" name="nick" id="nick" value="">
+		</fieldset>
+		<button id="login">Connect</button>
+		<button id="users">List users</button>
+		<button id="test">Test Video</button>
+		<button id="clear">Clear</button>
+	</div>
+	<div id="userlist"></div>
+	
 </body>
 </html> 
