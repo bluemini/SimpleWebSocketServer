@@ -87,25 +87,23 @@ public class Server implements Runnable {
 			try
 			{
 				socket = server.accept();
-				new WSRequest(this, socket).run();
+				new Thread(new WSRequest(this, socket)).start();
 			}
 			catch (Exception e)
 			{
 				System.out.println("Server Error: "+e.getMessage());
 				return;
 			}
-			finally
+		}
+		
+		if (socket != null)
+		{
+			try
 			{
-				if (socket != null)
-				{
-					try
-					{
-						socket.close();
-					}
-					catch (Exception e)
-					{}
-				}
+				socket.close();
 			}
+			catch (Exception e)
+			{}
 		}
 	}
 	
