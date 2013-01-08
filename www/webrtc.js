@@ -3,8 +3,8 @@
 	var configuration = {"iceServers": []};
 	var selfView;
 	var remoteView;
-	//var WSServer = "127.0.0.1";
-	var WSServer = "10.168.0.59";
+	var WSServer = "127.0.0.1";
+	// var WSServer = "10.168.0.59";
 	var caller = false;
 	
 	//console.log(webkitRTCPeerConnection);
@@ -176,8 +176,10 @@
 			getUsers();
 		}
 		
-		document.getElementById("test").onclick = function() {
-			getVideo();
+		document.getElementById("close").onclick = function() {
+			if (signalingChannel) {
+				signalingChannel.close();
+			}
 		}
 		
 		document.getElementById("clear").onclick = function() {
