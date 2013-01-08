@@ -36,6 +36,7 @@ import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Random;
 
 
 public class WSRequest
@@ -43,6 +44,7 @@ implements Runnable
 {
 	private final Server server;
 	private final Socket socket;
+	private final String id;
 	
 	private InputStream in;
 	private int FrameCount = 0;
@@ -73,6 +75,8 @@ implements Runnable
 	
 	public static enum PayloadType			{TEXT, BINARY};
 	
+	private Object sendLock = new Object();
+	
 	/**
 	 * The constructor takes an input stream and parses out the meaning. You
 	 * do NOT construct the WSRequest to generate the appropriate headers
@@ -83,6 +87,7 @@ implements Runnable
 	{
 		this.server = server;
 		this.socket = socket;
+		this.id		= String.valueOf((new Random()).nextInt(Integer.MAX_VALUE));
 		// SocketAddress remote = socket.getRemoteSocketAddress();
 	}
 	
@@ -97,7 +102,7 @@ implements Runnable
 
 			// attempt to start a WebSocket session - failure caught in error handler
 			String responseString = startSession(in);
-			sendResponse(responseString, socket);
+			sendResponse(responseString);
 
 			// the main connection loop takes the remaining message input
 			while(true)
@@ -121,7 +126,8 @@ implements Runnable
 					}
 					else
 					{
-						respond();
+						server.handler.response(this);
+						// System.out.println(new String(response.getResponse()));
 						System.out.println("Reset all flags as we've received the last frame of the current message.");
 						resetFlags();
 					}
@@ -144,6 +150,8 @@ implements Runnable
 		{
 			System.out.println(e.getMessage());
 		}
+		
+		System.out.println("Shutting down the server");
 		
 	}
 	
@@ -183,9 +191,9 @@ implements Runnable
 			{
 			    
 			    int defBuff = 1024;
-			    if (payloadSize < defBuff)
+			    if (bytesLeft < defBuff)
 			    {
-			        defBuff = (int) payloadSize;
+			        defBuff = (int) bytesLeft;
 			    }
 			    buff = new byte[defBuff];
 			    
@@ -250,19 +258,6 @@ implements Runnable
 	}
 	
 	/**
-	 * Based on the opcode of the incoming frame, we prepare the response.
-	 */
-	public void respond()
-	throws IOException
-	{
-		response = server.handler.response(this);
-		System.out.println("Sending a response");
-
-		sendResponse(response.getResponse(), socket);
-		System.out.println(new String(response.getResponse()));
-	}
-	
-	/**
 	 * Reads the first byte of the incoming data stream and establishes the
 	 * type of the request and the sets the various flags.
 	 * @param status
@@ -279,17 +274,25 @@ implements Runnable
 			RSV3 = true;
 		
 		// if the opcode is 8, then we're closing
-		opcode = (byte) (status & (1+2+4+8));
+		opcode = (byte) (status & (15)); // lower 4 bits = 1+2+4+8 = 15 
 		if (opcode == WSRequest.OPCODE_CONNECTION_CLOSE)
 		{
 			System.out.println("Received request to close the connection. Returning closing frame");
 			closing = true;
-			response = new WSResponse(WSRequest.OPCODE_CONNECTION_CLOSE, "");
+			try {
+				response = new WSResponse(WSRequest.OPCODE_CONNECTION_CLOSE, "");
+			} catch (UnsupportedEncodingException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
 		
 		if (opcode >= 8)
 		{
 		    controlFrame = true;
+		    if (opcode == 0xF) {
+		        System.exit(1);
+		    }
 		}
 		else
 		{
@@ -365,28 +368,11 @@ implements Runnable
 			resp.append("Sec-WebSocket-Accept: " + upgradeHandler.getAcceptKey() + "\r\n");
 			resp.append("\r\n");
 			System.out.println("Connection established, upgrading to WebSocket");
+			this.server.handler.upgrade(this);
 			return resp.toString();
 		} else {
 			throw new SWSSUpgradeException("Connection upgrade disallowed. Reason: " + upgradeHandler.getFailure());
 		}
-	}
-	
-	/***
-	 * We take a responseBody (String or byte[]) and push it out through the provided socket
-	 * @param responseBody
-	 * @param socket
-	 * @throws IOException
-	 */
-	private void sendResponse(String responseBody, Socket socket) throws IOException {
-		BufferedOutputStream bos = new BufferedOutputStream(socket.getOutputStream());
-		bos.write(responseBody.getBytes());
-		bos.flush();
-	}
-	
-	private void sendResponse(byte[] responseBody, Socket socket) throws IOException {
-		BufferedOutputStream bos = new BufferedOutputStream(socket.getOutputStream());
-		bos.write(responseBody);
-		bos.flush();
 	}
 	
 	/**
@@ -424,23 +410,67 @@ implements Runnable
 	}
 	
 	
-	// ACCESSORS
-	public String getMessage()
-	{
+	/*********************************
+	
+	Public API
+	
+	*********************************/
+	
+    /***
+     * We take a responseBody (String or byte[]) and push it out through the provided socket
+     * @param responseBody
+     * @param socket
+     * @throws IOException
+     */
+    public void sendResponse(WSResponse response) throws IOException {
+        BufferedOutputStream bos = new BufferedOutputStream(socket.getOutputStream());
+        synchronized(sendLock) {
+            byte[] buff = response.getResponse(); 
+        	bos.write(buff);
+            bos.flush();
+        }
+    }
+    
+    public void sendResponse(String responseBody) throws IOException {
+        BufferedOutputStream bos = new BufferedOutputStream(socket.getOutputStream());
+        synchronized(sendLock) {
+            bos.write(responseBody.getBytes());
+            bos.flush();
+        }
+    }
+    
+    public void sendResponse(byte[] responseBody) throws IOException {
+        BufferedOutputStream bos = new BufferedOutputStream(socket.getOutputStream());
+        synchronized(sendLock) {
+            bos.write(responseBody);
+            bos.flush();
+        }
+    }
+    
+    public byte[] getMessage()
+    {
 		int numBytes = payload.size();
 		byte[] message = new byte[numBytes];
 		for (int i=0; i<numBytes; i++)
 			message[i] = payload.get(i);
-		String encodedMessage = message.toString();
-		try
-		{
-		    encodedMessage = new String(message, "UTF-8"); 
-		}
-		catch (UnsupportedEncodingException uee)
-		{
-		    System.out.println("Unable to decode byte array, using platform default encoding..");
-		}
-		return encodedMessage;
+    	return message;
+    }
+    
+	public String getMessageString()
+	throws UnsupportedEncodingException
+	{
+		byte[] message = getMessage();
+		return new String(message, "UTF-8");
+	}
+	
+	public String getId()
+	{
+		return this.id;
+	}
+	
+	public int getOpcode()
+	{
+		return opcode;
 	}
 
 }
