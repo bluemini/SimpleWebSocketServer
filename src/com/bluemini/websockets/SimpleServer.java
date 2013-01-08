@@ -28,7 +28,7 @@
  */
 package com.bluemini.websockets;
 
-import com.bluemini.websockets.handlers.EchoHandler;
+import com.bluemini.websockets.handlers.WebRTCHandler;
 import com.bluemini.websockets.server.Server;
 
 public class SimpleServer {
@@ -39,7 +39,7 @@ public class SimpleServer {
 	public static void main(String[] args) {
 		
 		// We're going to use the echo handler to simply echo back the message
-		Server s = new Server(new EchoHandler());
+		Server s = new Server(new WebRTCHandler());
 		
 		// we'll accept connections from all domains
 		s.setHost("*");
