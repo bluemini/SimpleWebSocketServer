@@ -79,7 +79,7 @@
 	}
 	
 	getUsers = function() {
-		setStatus("fetching users");
+		console.log("fetching users");
 		signalingChannel.send('{"users":""}');
 	}
 	
@@ -137,6 +137,7 @@
 
 					    } else if (signal.hasOwnProperty("sessionstarted")) {
 					    	console.log("Server has 'joined' us with the callee, session started, begin comms");
+					    	// begin JSEP process
 					    	start(true);
 					    
 					    } else if (signal.type) {
