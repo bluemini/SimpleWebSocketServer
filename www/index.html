@@ -2,13 +2,17 @@
 <head>
 	<meta charset="utf-8" />
 	<title>WebSocket Test</title>
-	<script language="javascript" src="./webrtc.js" type="text/javascript"></script>
+	<script language="javascript" src="./js/webrtc_new.js" type="text/javascript"></script>
+	<link href="./css/im.css" rel="stylesheet" type="text/css">
 </head>
 <body>
 
-	<h2>WebSocket Test</h2>
-	<video id="video" style="width:240px; height:180px"></video>
-	<video id="remote" style="width:240px; height:180px"></video>
+	<h1>WebSocket Test</h1>
+	
+	<div class="video-container">
+		<video id="video" class="local"></video>
+		<video id="remote" class="remote inactive br"></video>
+	</div>
 	
 	<div>
 		<div id="status"></div>

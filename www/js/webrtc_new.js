@@ -12,13 +12,6 @@
 	//console.log(webkitRTCPeerConnection);
 	var RTCPeerConnection = RTCPeerConnection || webkitRTCPeerConnection || mozRTCPeerConnection;
 	navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
-	
-	var RTCPeer = {
-			pc: null,
-			connect: function(config) {
-				this.pc = new RTCPeerConnection(config);
-			}
-	}
 
 	// run start(true) to initiate a call
 	function start(isCaller) {
@@ -26,11 +19,10 @@
 		console.log("Starting PC");
 		caller = isCaller;
 		
-	    // pc = new RTCPeerConnection(configuration);
-		RTCPeer.connect(configuration);
+	    pc = new RTCPeerConnection(configuration);
 
 	    // send any ice candidates to the other peer
-	    RTCPeer.onicecandidate = function (evt) {
+	    pc.onicecandidate = function (evt) {
 	    	if (evt.candidate) {
 		    	console.log("C->S: " + JSON.stringify(evt.candidate));
 		        signalingChannel.send(JSON.stringify({ "candidate": evt.candidate }));
@@ -39,16 +31,16 @@
 	    	}
 	    };
 	    
-	    RTCPeer.onopen = function(evt) {
+	    pc.onopen = function(evt) {
 	    	console.log("PC session is now open");
 	    }
 	    
-	    RTCPeer.onconnecting = function(message) {
+	    pc.onconnecting = function(message) {
 	    	console.log("PC Session connecting.");
 	    }
 
 	    // once remote stream arrives, show it in the remote video element
-	    RTCPeer.onaddstream = function (evt) {
+	    pc.onaddstream = function (evt) {
 	    	console.log("Adding remote stream - setting remote view");
 	        
 	    	remoteView.autoplay = true;
@@ -56,7 +48,7 @@
 	        // remoteView.src = selfView.src;
 	    };
 	    
-	    RTCPeer.onremovestream = function(evt) {
+	    pc.onremovestream = function(evt) {
 	    	console.log("Removing stream");
 	    	console.log(evt);
 	    }
@@ -67,6 +59,10 @@
 	    	selfView.autoplay = true;
 	        selfView.src = URL.createObjectURL(stream);
 	        localStream = stream;
+
+	        if (isCaller) { // getting hold of video on the caller, we can produce an offer
+	        } else { // getting hold of video on the receiver allows us to answer an offer 
+	        }
 
 	    },
 	    function(evt) {

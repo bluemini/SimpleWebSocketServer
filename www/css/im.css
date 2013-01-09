@@ -1,0 +1,41 @@
+body {
+	font-family: helvetica-neue, verdana, sans-serif;
+	padding: 0;
+	margin: 0;
+}
+
+h1, h2, h3, h4, h5, h6 {
+	margin: 0;
+	padding: 0;
+}
+
+h1 {
+	line-height: 1em;
+	padding: 0.5em;
+	background-color: #666;
+	color: #FFF;
+}
+
+.video-container {
+	position: relative;
+}
+video {
+	width: 320px;
+	height: 240px;
+	/*position: absolute;*/
+}
+video.local {
+	background-color: #CCC;
+}
+video.remote {
+	width: 320px;
+	height: 240px;
+	z-index: 10;
+}
+video.inactive {
+	/*display: none;*/
+}
+video.br {
+	bottom: 0.1em;
+	right: 0.1em;
+}
