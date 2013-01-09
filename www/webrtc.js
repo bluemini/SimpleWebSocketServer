@@ -1,8 +1,10 @@
 	var signalingChannel;
 	var pc;
-	var configuration = {"iceServers": []};
+	// var configuration = {"iceServers":[{"url":"stun:stun.l.google.com:19302"}]};
+	var configuration = {'iceServers': []};
 	var selfView;
 	var remoteView;
+	var localStream;
 	var WSServer = "127.0.0.1";
 	// var WSServer = "10.168.0.59";
 	var caller = false;
@@ -21,46 +23,58 @@
 
 	    // send any ice candidates to the other peer
 	    pc.onicecandidate = function (evt) {
-	    	// console.log(evt);
-	        signalingChannel.send(JSON.stringify({ "candidate": evt.candidate }));
+	    	if (evt.candidate) {
+		    	console.log("C->S: " + JSON.stringify(evt.candidate));
+		        signalingChannel.send(JSON.stringify({ "candidate": evt.candidate }));
+	    	} else {
+	    		console.log("End of candidates");
+	    	}
 	    };
 	    
 	    pc.onopen = function(evt) {
-	    	// do nothing for now
+	    	console.log("PC session is now open");
+	    }
+	    
+	    pc.onconnecting = function(message) {
+	    	console.log("PC Session connecting.");
 	    }
 
 	    // once remote stream arrives, show it in the remote video element
 	    pc.onaddstream = function (evt) {
-	    	console.log("Adding stream - setting remote view");
-	    	remoteView = document.getElementById("remote");
+	    	console.log("Adding remote stream - setting remote view");
+	        
+	    	remoteView.autoplay = true;
 	        remoteView.src = URL.createObjectURL(evt.stream);
-	        remoteView.autoplay = true;
+	        // remoteView.src = selfView.src;
 	    };
 	    
 	    pc.onremovestream = function(evt) {
-	    	// do nothing for now
+	    	console.log("Removing stream");
+	    	console.log(evt);
 	    }
 
 	    // get the local stream, show it in the local video element and send it
 	    navigator.getUserMedia({ "audio": true, "video": true }, function (stream) {
+	    	
 	    	selfView.autoplay = true;
 	        selfView.src = URL.createObjectURL(stream);
-	        pc.addStream(stream);
-	        console.log("Adding stream to PC");
+	        localStream = stream;
 
 	        if (isCaller) { // getting hold of video on the caller, we can produce an offer
-	        	console.log("Creating an offer to the callee");
-	            pc.createOffer(gotDescription, null);
 	        } else { // getting hold of video on the receiver allows us to answer an offer 
-	    		console.log("Creating answer");
-	    		pc.createAnswer(gotDescription, null);
 	        }
 
+	    },
+	    function(evt) {
+	    	console.log("getUserMedia failed. " + evt);
 	    });
 	}
 	
 	function gotDescription(desc) {
-        pc.setLocalDescription(desc);
+		console.log("Setting local description");
+        pc.setLocalDescription(desc); // appears to be the trigger to generate ICE candidates
+        
+        console.log("Sending message: " + JSON.stringify(desc))
         signalingChannel.send(JSON.stringify({ "sdp": desc }));
     }
 
@@ -102,7 +116,12 @@
 	
 	window.onload = function() {
 		selfView = document.getElementById("video");
+    	remoteView = document.getElementById("remote");
 		document.getElementById("login").onclick = function() {
+
+			if (!pc)
+		        start(false);
+
 			if (document.getElementById("name").value && document.getElementById("nick")) {
 				
 				if (!signalingChannel) {
@@ -116,35 +135,41 @@
 					    var signal = JSON.parse(evt.data);
 
 					    if (signal.sdp) {
-							if (!pc)
-						        start(false);
-							console.log("Received SDP, setting remote description");
-					    	pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+							console.log("WS: Received SDP offer");
+							pc.addStream(localStream);
+							pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+				    		console.log("Creating answer");
+				    		pc.createAnswer(gotDescription, null);
 
 					    } else if (signal.users) {
-					    	console.log("Received some users..." + evt.data);
-					    	renderUsers(signal.users);
+					    	if (!pc) {
+					    		alert("You must allow access to audio/video before starting comms");
+					    	} else {
+						    	console.log("WS: Received some users..." + evt.data);
+						    	renderUsers(signal.users);
+					    	}
 
-					    } else if (signal.candidate) {
-					    	console.log("Receiving a candidate");
-							if (!pc) {
-						        start(false);
-							}
+					    } else if (signal.hasOwnProperty("candidate")) {
+					    	console.log("WS: S->C: Receiving a candidate: " + JSON.stringify(signal));
 					    	pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
 					    
 					    } else if (signal.hasOwnProperty("success")) {
 					    	// show the success!?
 
 					    } else if (signal.hasOwnProperty("sessionstarted")) {
-					    	console.log("Server has 'joined' us with the callee, session started, begin comms");
+					    	console.log("WS: Server has 'joined' us with the callee, session started, begin comms");
 					    	// begin JSEP process
-					    	start(true);
+					        console.log("Adding local stream to PC");
+					        pc.addStream(localStream);
+				        	console.log("Creating an offer to the callee");
+				            pc.createOffer(gotDescription, null);
 					    
 					    } else if (signal.type) {
-					    	console.log("signal received from callee with type: " + signal.type);
+					    	console.log("WS: signal received from callee with type: " + signal.type);
 					    
 					    } else {
-					    	console.log("Unknown response from RTC server..." + signal);
+					    	console.log("WS: Unknown response from RTC server...");
+					    	console.log(signal);
 					    }
 					};
 					
