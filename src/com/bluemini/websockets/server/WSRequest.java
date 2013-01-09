@@ -114,6 +114,7 @@ implements Runnable
 				if (closing)
 				{
 					System.out.println("Closing WebSocket");
+					sendResponse(response);
 					break;
 				}
 				
@@ -291,7 +292,13 @@ implements Runnable
 		{
 		    controlFrame = true;
 		    if (opcode == 0xF) {
-		        System.exit(1);
+	            closing = true;
+	            try {
+	                response = new WSResponse(WSRequest.OPCODE_CONNECTION_CLOSE, "");
+	            } catch (UnsupportedEncodingException e) {
+	                // TODO Auto-generated catch block
+	                e.printStackTrace();
+	            }
 		    }
 		}
 		else

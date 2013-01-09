@@ -87,6 +87,7 @@ public class Server implements Runnable {
 			try
 			{
 				socket = server.accept();
+				System.out.println("Accepting a new session");
 				new Thread(new WSRequest(this, socket)).start();
 			}
 			catch (Exception e)
