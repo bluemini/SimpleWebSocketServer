@@ -18,7 +18,12 @@ public abstract class SWSSHandler {
 		// Implement this..
 	}
 
-	public void sendResponse(WSRequest request, WSResponse response)
+    public void onClose(WSRequest request)
+    {
+        // Implement this..
+    }
+
+    public void sendResponse(WSRequest request, WSResponse response)
 	{
 		System.out.println("Sending a response");
 		try

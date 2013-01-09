@@ -18,6 +18,7 @@ public class WebRTCHandler extends SWSSHandler {
 	private ArrayList<WebRTCSession> sessions = new ArrayList<WebRTCSession>();
     private HashMap<String, WebRTCClient> clients = new HashMap<String, WebRTCClient>();
 	
+    @Override
 	public void response(WSRequest request)
 	{
         JSONObject jsonResponse = new JSONObject();
@@ -111,6 +112,12 @@ public class WebRTCHandler extends SWSSHandler {
 	public void upgrade(WSRequest request)
 	{
 		// nothing to do..
+	}
+	
+	@Override
+	public void onClose(WSRequest request)
+	{
+	    // TODO: need to remove closed websocket sessions from the clients list and any sessions
 	}
 	
 	/**

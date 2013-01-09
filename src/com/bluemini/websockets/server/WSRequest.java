@@ -153,6 +153,7 @@ implements Runnable
 		}
 		
 		System.out.println("Shutting down the request");
+		this.server.handler.onClose(this);
 		
 	}
 	
