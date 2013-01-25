@@ -137,7 +137,7 @@ implements Runnable
 			}
 			
 		}
-		catch (SWSSUpgradeException swssue)
+		catch (SWSSException swssue)
 		{
 			// the HTTP Upgrade failed
 			System.out.println("Upgrade Error: " + swssue.getMessage());
@@ -163,7 +163,7 @@ implements Runnable
 	 * @throws IOException
 	 */
 	private void parseFrame()
-	throws IOException, SWSSUnsupportedPayloadType, SWSSIncorrectOpcode
+	throws IOException, SWSSException
 	{
 		byte[] buff;
 		long bytesLeft = 0;
@@ -245,14 +245,14 @@ implements Runnable
 				}
 				else
 				{
-					throw new SWSSUnsupportedPayloadType("Unknown opcode ("+opcode+") for non-control frame received.");
+					throw new SWSSException("Unknown opcode ("+opcode+") for non-control frame received.");
 				}
 			}
 			else
 			{
 				if (opcode != WSRequest.OPCODE_CONTINUATION_FRAME)
 				{
-					throw new SWSSIncorrectOpcode("The opcode for all frames other than the"+
+					throw new SWSSException("The opcode for all frames other than the"+
 							" first, must be set to 0 (continuation)");
 				}
 			}
@@ -379,7 +379,7 @@ implements Runnable
 			this.server.handler.upgrade(this);
 			return resp.toString();
 		} else {
-			throw new SWSSUpgradeException("Connection upgrade disallowed. Reason: " + upgradeHandler.getFailure());
+			throw new SWSSException("Connection upgrade disallowed. Reason: " + upgradeHandler.getFailure());
 		}
 	}
 	
