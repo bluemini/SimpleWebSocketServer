@@ -10,7 +10,19 @@
 	var caller = false;
 	
 	//console.log(webkitRTCPeerConnection);
-	var RTCPeerConnection = RTCPeerConnection || webkitRTCPeerConnection || mozRTCPeerConnection;
+	//var RTCPeerConnection = RTCPeerConnection;
+	if (!RTCPeerConnection) {
+		if (webkitRTCPeerConnection) {
+			console.log("On Chrome..");
+			RTCPeerConnection = webkitRTCPeerConnection;
+		} else if (mozRTCPeerConnection) {
+			console.log("On Firefox..");
+			RTCPeerConnection = mozRTCPeerConnection;
+		} else {
+			console.log("Can't seem to find a Peer Connection to use.");
+		}
+	}
+	//  = RTCPeerConnection || webkitRTCPeerConnection || mozRTCPeerConnection;
 	navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
 
 	// run start(true) to initiate a call
