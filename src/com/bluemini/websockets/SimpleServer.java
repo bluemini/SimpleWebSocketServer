@@ -28,7 +28,7 @@
  */
 package com.bluemini.websockets;
 
-import com.bluemini.websockets.handlers.WebRTCHandler;
+import com.bluemini.webrtc.WebRTCHandler;
 import com.bluemini.websockets.server.Server;
 
 public class SimpleServer {

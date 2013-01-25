@@ -26,12 +26,10 @@
  *   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *   POSSIBILITY OF SUCH DAMAGE.
  */
-package com.bluemini.websockets.handlers;
+package com.bluemini.websockets.server;
 
 import java.io.UnsupportedEncodingException;
 
-import com.bluemini.websockets.server.WSRequest;
-import com.bluemini.websockets.server.WSResponse;
 
 public class EchoHandler extends SWSSHandler {
 	

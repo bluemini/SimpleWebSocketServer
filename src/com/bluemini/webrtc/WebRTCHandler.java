@@ -26,7 +26,7 @@
  *   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *   POSSIBILITY OF SUCH DAMAGE.
  */
-package com.bluemini.websockets.handlers;
+package com.bluemini.webrtc;
 
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
@@ -38,6 +38,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import com.bluemini.websockets.server.SWSSHandler;
 import com.bluemini.websockets.server.WSRequest;
 import com.bluemini.websockets.server.WSResponse;
 
@@ -146,6 +147,13 @@ public class WebRTCHandler extends SWSSHandler {
 	public void onClose(WSRequest request)
 	{
 	    // TODO: need to remove closed websocket sessions from the clients list and any sessions
+	    if (clients.containsKey(request.getId()))
+	    {
+	        // disconnect this client from any sessions and then drop the client
+	        WebRTCClient client = clients.get(request.getId()); 
+	        client.disconnect(true);
+	        clients.remove(request.getId());
+	    }
 	}
 	
 	/**
@@ -206,14 +214,36 @@ class WebRTCSession
 	private Calendar LastAccess = Calendar.getInstance();
 	protected WebRTCClient caller;
 	protected WebRTCClient callee;
+	
 	public WebRTCSession(WebRTCClient caller, WebRTCClient callee)
 	{
 	    this.caller = caller;
 	    this.callee = callee;
 	}
+	
 	public Calendar getInitDateTime()
 	{
 	    return this.LastAccess;
+	}
+	
+	/**
+	 * Closes a session, disconnecting clients if present. Removes internal
+	 * references to caller/callee. A reference to a client is passed in and
+	 * then the 'other' client is disconnected.
+	 * @param client
+	 */
+	public void close(WebRTCClient client)
+	{
+	    if (this.caller != null && !this.caller.equals(client))
+        {
+            this.caller.disconnect(false);
+        }
+	    else if (this.callee != null && !this.callee.equals(client))
+        {
+            this.callee.disconnect(false);
+        }
+	    this.caller = null;
+	    this.callee = null;
 	}
 }
 
@@ -244,18 +274,38 @@ class WebRTCClient
 		this.isCaller = isCaller;
 	}
 	
+	public void disconnect(boolean cascade)
+	{
+	    // if the client is attached to a session, we need to drop it
+	    if (cascade && this.session != null)
+	    {
+	        this.session.close(this);
+	    }
+        this.session = null;
+        System.out.println("Disconnected client/session");
+	}
+	
+	/**
+	 * If the client is in a session, return the 'other' client, otherwise
+	 * return null.
+	 * @return
+	 */
 	public WebRTCClient getOtherClient()
 	{
-	    if (isCaller)
+	    if (session != null)
 	    {
-	    	System.out.println("sending back the caller client");
-	        return session.callee;
+	        if (isCaller)
+	        {
+	            System.out.println("sending back the caller client");
+	            return session.callee;
+	        }
+	        else
+	        {
+	            System.out.println("sending back the callee client");
+	            return session.caller;
+	        }
 	    }
-	    else
-	    {
-	    	System.out.println("sending back the callee client");
-	        return session.caller;
-	    }
+	    return null;
 	}
 	
 	public JSONObject toJSON()

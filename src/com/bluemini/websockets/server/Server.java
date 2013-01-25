@@ -34,7 +34,6 @@ import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.HashSet;
 
-import com.bluemini.websockets.handlers.SWSSHandler;
 
 public class Server implements Runnable {
 	

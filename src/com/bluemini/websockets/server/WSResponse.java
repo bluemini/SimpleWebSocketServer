@@ -104,7 +104,7 @@ public class WSResponse {
 		    responsePayload[0] = (byte) (payloadSize >> 8);
 		    responsePayload[1] = (byte) (payloadSize & 255);
 		}
-		else
+		else // TODO handle payloads over 65535 bytes
 		{
 		    responsePayload = new byte[0];
 		}
