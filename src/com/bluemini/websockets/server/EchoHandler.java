@@ -30,7 +30,6 @@ package com.bluemini.websockets.server;
 
 import java.io.UnsupportedEncodingException;
 
-
 public class EchoHandler extends SWSSHandler {
 	
 	public void response(WSRequest request)

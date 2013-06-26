@@ -5,13 +5,11 @@
 	var selfView;
 	var remoteView;
 	var localStream;
-	var WSServer = "127.0.0.1";
+	var WSServer = window.location.host;
 	// var WSServer = "10.168.0.59";
 	var caller = false;
 	
-	//console.log(webkitRTCPeerConnection);
-	//var RTCPeerConnection = RTCPeerConnection;
-	if (!RTCPeerConnection) {
+	/* if (typeof RTCPeerConnection === undefined) {
 		if (webkitRTCPeerConnection) {
 			console.log("On Chrome..");
 			RTCPeerConnection = webkitRTCPeerConnection;
@@ -21,10 +19,13 @@
 		} else {
 			console.log("Can't seem to find a Peer Connection to use.");
 		}
-	}
-	//  = RTCPeerConnection || webkitRTCPeerConnection || mozRTCPeerConnection;
+	} */
+	
+	RTCPeerConnection  = window.mozRTCPeerConnection || window.webkitRTCPeerConnection || window.RTCPeerConnection;
+	console.log(typeof RTCPeerConnection);
+	
 	navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
-
+	
 	// run start(true) to initiate a call
 	function start(isCaller) {
 		

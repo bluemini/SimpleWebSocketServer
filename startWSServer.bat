@@ -14,7 +14,7 @@ if NOT DEFINED SWSS_MAIN set SWSS_MAIN=com.bluemini.websockets.SimpleServer
 
 REM Shorten lib path for old platforms
 set CLASSPATH=%SWSS_HOME%;%SWSS_HOME%\bin
-REM set CLASSPATH=%CLASSPATH%;%SWSS_HOME%\classes
+REM set CLASSPATH=%CLASSPATH%;%SWSS_HOME%\bin
 
 set JAVA_OPTS=
 
