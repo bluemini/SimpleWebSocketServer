@@ -147,6 +147,10 @@ implements Runnable
 			// anything
 			System.out.println("ERROR: " + ioe.getMessage());
 		}
+		catch (InterruptedException ie)
+		{
+		    System.out.println("InterruptedException: " + ie.getMessage());
+		}
 		catch (Exception e)
 		{
 			System.out.println(e.getMessage());

@@ -30,19 +30,22 @@ package com.bluemini.websockets.server;
 
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketAddress;
-import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 
 
 public class Server implements Runnable {
 	
-	private boolean keepServing = true;
+	public boolean keepServing = true;
 	
+    private ServerSocket server;
+
 	private static int defaultPort = 88;
 	private int listenPort;
 	public SWSSHandler handler;
-	private ArrayList<SocketAddress> connections = new ArrayList<SocketAddress>();
+	private List<Thread> connections = new LinkedList<Thread>();
 	private HashSet<String> Hosts = new HashSet<String>();
 	
 	public Server(SWSSHandler handler)
@@ -63,7 +66,6 @@ public class Server implements Runnable {
 	
 	@Override
 	public void run() {
-		ServerSocket server;
 		Socket socket = null;
 		
 		// set up the HTTP server to listen for connections..
@@ -87,12 +89,24 @@ public class Server implements Runnable {
 			{
 				socket = server.accept();
 				System.out.println("Accepting a new session");
-				new Thread(new WSRequest(this, socket)).start();
+				Thread t = new Thread(new WSRequest(this, socket));
+				t.start();
+				connections.add(t);
 			}
 			catch (Exception e)
 			{
 				System.out.println("Server Error: "+e.getMessage());
-				return;
+				break;
+			}
+			// each new connection, run through the list and remove any expired threads
+			Iterator<Thread> i = connections.iterator();
+			while (i.hasNext())
+			{
+			    Thread tt = i.next();
+			    if (!tt.isAlive())
+			    {
+			        i.remove();
+			    }
 			}
 		}
 		
@@ -103,7 +117,9 @@ public class Server implements Runnable {
 				socket.close();
 			}
 			catch (Exception e)
-			{}
+			{
+			    System.out.println("Error closing Server socket. " + e.getMessage());
+			}
 		}
 	}
 	
@@ -116,4 +132,22 @@ public class Server implements Runnable {
 		return false;
 	}
 	
+	public void stop()
+	{
+        Iterator<Thread> i = connections.iterator();
+        while (i.hasNext())
+        {
+            Thread tt = i.next();
+            tt.interrupt();
+        }
+        
+        // to close down the main server thread, we close the socket
+        try
+        {
+            server.close();
+        }
+        catch (Exception e) {
+            System.out.println("closing socket on Server errored. " + e.getMessage());
+        }
+	}
 }
