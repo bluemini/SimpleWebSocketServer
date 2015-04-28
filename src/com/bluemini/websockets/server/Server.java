@@ -37,103 +37,98 @@ import java.util.List;
 
 
 public class Server implements Runnable {
-	
-	public boolean keepServing = true;
-	
+    
+    public boolean keepServing = true;
+    
     private ServerSocket server;
 
-	private static int defaultPort = 88;
-	private int listenPort;
-	public SWSSHandler handler;
-	private List<Thread> connections = new LinkedList<Thread>();
-	private HashSet<String> Hosts = new HashSet<String>();
-	
-	public Server(SWSSHandler handler)
-	{
-		this(defaultPort, handler);
-	}
-	
-	public Server(int port, SWSSHandler handler)
-	{
-		listenPort = port;
-		this.handler = handler;
-	}
-	
-	public void setHost(String host)
-	{
-		Hosts.add(host);
-	}
-	
-	@Override
-	public void run() {
-		Socket socket = null;
-		
-		// set up the HTTP server to listen for connections..
-		try
-		{
-			server = new ServerSocket(listenPort);
-		}
-		catch (Exception e)
-		{
-			System.out.println(e.getMessage());
-			return;
-		}
-		
-		System.out.println("listening for connections on port "+listenPort);
-		
-		/* wait for incoming connection. When received, we process it to
-		 * see if we have a matching url to service. 
-		 */
-		while (keepServing) {
-			try
-			{
-				socket = server.accept();
-				System.out.println("Accepting a new session");
-				Thread t = new Thread(new WSRequest(this, socket));
-				t.start();
-				connections.add(t);
-			}
-			catch (Exception e)
-			{
-				System.out.println("Server Error: "+e.getMessage());
-				break;
-			}
-			// each new connection, run through the list and remove any expired threads
-			Iterator<Thread> i = connections.iterator();
-			while (i.hasNext())
-			{
-			    Thread tt = i.next();
-			    if (!tt.isAlive())
-			    {
-			        i.remove();
-			    }
-			}
-		}
-		
-		if (socket != null)
-		{
-			try
-			{
-				socket.close();
-			}
-			catch (Exception e)
-			{
-			    System.out.println("Error closing Server socket. " + e.getMessage());
-			}
-		}
-	}
-	
-	synchronized public boolean hasHost(String host)
-	{
-		if (Hosts.contains("*") || Hosts.contains(host))
-		{
-			return true;
-		}
-		return false;
-	}
-	
-	public void stop()
-	{
+    private static int defaultPort = 88;
+    private int listenPort;
+    public SWSSHandler handler;
+    private List<Thread> connections = new LinkedList<Thread>();
+    private HashSet<String> Hosts = new HashSet<String>();
+    
+    public Server(SWSSHandler handler)
+    {
+        this(defaultPort, handler);
+    }
+    
+    public Server(int port, SWSSHandler handler)
+    {
+        listenPort = port;
+        this.handler = handler;
+    }
+    
+    public void setHost(String host)
+    {
+        Hosts.add(host);
+    }
+    
+    @Override
+    public void run() {
+        // set up the HTTP server to listen for connections..
+        try
+        {
+            server = new ServerSocket(listenPort);
+            System.out.println("listening for connections on port "+listenPort);
+        }
+        catch (Exception e)
+        {
+            System.out.println(e.getMessage());
+            return;
+        }
+        
+        serve();
+    }
+    
+    /* wait for incoming connection. When received, we process it to
+     * see if we have a matching url to service. 
+     */
+    private void serve()
+    {
+        Socket socket = null;
+        try
+        {
+            while (keepServing) {
+                socket = server.accept();
+                System.out.println("Accepting a new session");
+                Thread t = new Thread(new WSRequest(this, socket));
+                t.start();
+                connections.add(t);
+                cleanseThreads();
+            }
+        }
+        catch (Exception e)
+        {
+            System.out.println("Server Error: "+e.getMessage());
+        }
+        finally
+        {
+            if (socket != null)
+            {
+                try
+                {
+                    socket.close();
+                }
+                catch (Exception e)
+                {
+                    System.out.println("Error closing Server socket. " + e.getMessage());
+                }
+            }
+        }
+    }
+    
+    synchronized public boolean hasHost(String host)
+    {
+        if (Hosts.contains("*") || Hosts.contains(host))
+        {
+            return true;
+        }
+        return false;
+    }
+    
+    public void stop()
+    {
         Iterator<Thread> i = connections.iterator();
         while (i.hasNext())
         {
@@ -149,5 +144,19 @@ public class Server implements Runnable {
         catch (Exception e) {
             System.out.println("closing socket on Server errored. " + e.getMessage());
         }
-	}
+    }
+    
+    // each new connection, run through the list and remove any expired threads
+    public void cleanseThreads()
+    {
+        Iterator<Thread> i = connections.iterator();
+        while (i.hasNext())
+        {
+            Thread tt = i.next();
+            if (!tt.isAlive())
+            {
+                i.remove();
+            }
+        }
+    }
 }

@@ -42,392 +42,392 @@ import java.util.Random;
 public class WSRequest
 implements Runnable
 {
-	private final Server server;
-	private final Socket socket;
-	private final String id;
-	
-	private InputStream in;
-	private int FrameCount = 0;
-	
-	// Message parameters
-	private boolean FIN						= false;
-	private boolean RSV1					= false;
-	private boolean RSV2					= false;
-	private boolean RSV3					= false;
-	public boolean closing					= false;
-	private byte opcode						= 0;
-	private boolean controlFrame			= false;
-	private boolean masked					= false;
-	private int mask						= 0;
-	private ArrayList<Byte> payload 		= new ArrayList<Byte>();
-	private long payloadSize				= -1;
-	private PayloadType payloadType;
-	public WSResponse response				= null;
-	
-	public static byte OPCODE_CONTINUATION_FRAME	= 0;
-	public static byte OPCODE_TEXT_FRAME			= 1;
-	public static byte OPCODE_BINARY_FRAME			= 2;
-	public static byte OPCODE_CONNECTION_CLOSE		= 8;
-	public static byte OPCODE_PING					= 9;
-	public static byte OPCODE_PONG					= 10;
-	
-	public static final String WSGUID		= "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-	
-	public static enum PayloadType			{TEXT, BINARY};
-	
-	private Object sendLock = new Object();
-	
-	/**
-	 * The constructor takes an input stream and parses out the meaning. You
-	 * do NOT construct the WSRequest to generate the appropriate headers
-	 * for a connection upgrade. These should all be called statically.
-	 * @param request
-	 */
-	public WSRequest(Server server, Socket socket)
-	{
-		this.server = server;
-		this.socket = socket;
-		this.id		= String.valueOf((new Random()).nextInt(Integer.MAX_VALUE));
-		// SocketAddress remote = socket.getRemoteSocketAddress();
-	}
-	
-	@Override
-	public void run()
-	{
-		resetFlags();
-		
-		try
-		{
-			this.in = this.socket.getInputStream();
+    private final Server server;
+    private final Socket socket;
+    private final String id;
+    
+    private InputStream in;
+    private int FrameCount = 0;
+    
+    // Message parameters
+    private boolean FIN						= false;
+    private boolean RSV1					= false;
+    private boolean RSV2					= false;
+    private boolean RSV3					= false;
+    public boolean closing					= false;
+    private byte opcode						= 0;
+    private boolean controlFrame			= false;
+    private boolean masked					= false;
+    private int mask						= 0;
+    private ArrayList<Byte> payload 		= new ArrayList<Byte>();
+    private long payloadSize				= -1;
+    private PayloadType payloadType;
+    public WSResponse response				= null;
+    
+    public static byte OPCODE_CONTINUATION_FRAME	= 0;
+    public static byte OPCODE_TEXT_FRAME			= 1;
+    public static byte OPCODE_BINARY_FRAME			= 2;
+    public static byte OPCODE_CONNECTION_CLOSE		= 8;
+    public static byte OPCODE_PING					= 9;
+    public static byte OPCODE_PONG					= 10;
+    
+    public static final String WSGUID		= "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    
+    public static enum PayloadType			{TEXT, BINARY};
+    
+    private Object sendLock = new Object();
+    
+    /**
+     * The constructor takes an input stream and parses out the meaning. You
+     * do NOT construct the WSRequest to generate the appropriate headers
+     * for a connection upgrade. These should all be called statically.
+     * @param request
+     */
+    public WSRequest(Server server, Socket socket)
+    {
+        this.server = server;
+        this.socket = socket;
+        this.id		= String.valueOf((new Random()).nextInt(Integer.MAX_VALUE));
+        // SocketAddress remote = socket.getRemoteSocketAddress();
+    }
+    
+    @Override
+    public void run()
+    {
+        resetFlags();
+        
+        try
+        {
+            this.in = this.socket.getInputStream();
 
-			// attempt to start a WebSocket session - failure caught in error handler
-			String responseString = startSession(in);
-			sendResponse(responseString);
+            // attempt to start a WebSocket session - failure caught in error handler
+            String responseString = startSession(in);
+            sendResponse(responseString);
 
-			// the main connection loop takes the remaining message input
-			while(true)
-			{
+            // the main connection loop takes the remaining message input
+            while(true)
+            {
 
-				parseFrame();
+                parseFrame();
 
-				// close out of the loop if we are to close the WebSocket
-				if (closing)
-				{
-					System.out.println("Closing WebSocket");
-					sendResponse(response);
-					break;
-				}
-				
-				// if this is the last frame of the message; return the response and then
-				// reset flags for new message
-				if (FIN) {
-					if (controlFrame)
-					{
-						WSControlHandler.respond(this);
-					}
-					else
-					{
-						server.handler.response(this);
-						// System.out.println(new String(response.getResponse()));
-						System.out.println("Reset all flags as we've received the last frame of the current message.");
-						resetFlags();
-					}
-				}
+                // close out of the loop if we are to close the WebSocket
+                if (closing)
+                {
+                    System.out.println("Closing WebSocket");
+                    sendResponse(response);
+                    break;
+                }
+                
+                // if this is the last frame of the message; return the response and then
+                // reset flags for new message
+                if (FIN) {
+                    if (controlFrame)
+                    {
+                        WSControlHandler.respond(this);
+                    }
+                    else
+                    {
+                        server.handler.response(this);
+                        // System.out.println(new String(response.getResponse()));
+                        System.out.println("Reset all flags as we've received the last frame of the current message.");
+                        resetFlags();
+                    }
+                }
 
-			}
-			
-		}
-		catch (SWSSException swssue)
-		{
-			// the HTTP Upgrade failed
-			System.out.println("Upgrade Error: " + swssue.getMessage());
-		}
-		catch (IOException ioe)
-		{
-			// anything
-			System.out.println("ERROR: " + ioe.getMessage());
-		}
-		catch (InterruptedException ie)
-		{
-		    System.out.println("InterruptedException: " + ie.getMessage());
-		}
-		catch (Exception e)
-		{
-			System.out.println(e.getMessage());
-		}
-		
-		System.out.println("Shutting down the request");
-		this.server.handler.onClose(this);
-		
-	}
-	
-	/**
-	 * Reads in all parts of the frame and builds the message. This will
-	 * assemble multiple frames until the FIN is sent.
-	 * @throws IOException
-	 */
-	private void parseFrame()
-	throws IOException, SWSSException
-	{
-		byte[] buff;
-		long bytesLeft = 0;
+            }
+            
+        }
+        catch (SWSSException swssue)
+        {
+            // the HTTP Upgrade failed
+            System.out.println("Upgrade Error: " + swssue.getMessage());
+        }
+        catch (IOException ioe)
+        {
+            // anything
+            System.out.println("ERROR: " + ioe.getMessage());
+        }
+        catch (InterruptedException ie)
+        {
+            System.out.println("InterruptedException: " + ie.getMessage());
+        }
+        catch (Exception e)
+        {
+            System.out.println(e.getMessage());
+        }
+        
+        System.out.println("Shutting down the request");
+        this.server.handler.onClose(this);
+        
+    }
+    
+    /**
+     * Reads in all parts of the frame and builds the message. This will
+     * assemble multiple frames until the FIN is sent.
+     * @throws IOException
+     */
+    private void parseFrame()
+    throws IOException, SWSSException
+    {
+        byte[] buff;
+        long bytesLeft = 0;
 
-		// get the first byte
-		setStatus(in.read());
-		
-		// figure out the payload length
-		setPayload(in);
-		
-		// read in the rest..if the payload is non-zero
-		if (payloadSize > 0)
-		{
-			// figure out the masking
-			if (masked)
-			{
-				mask = 0;
-				for (int i=4; i>0; i--)
-				{
-					mask += in.read() << ((i-1)*8);
-				}
-				System.out.println("Mask: "+mask);
-			}
-			bytesLeft = payloadSize;
-			
-			do
-			{
-			    
-			    int defBuff = 1024;
-			    if (bytesLeft < defBuff)
-			    {
-			        defBuff = (int) bytesLeft;
-			    }
-			    buff = new byte[defBuff];
-			    
-				int bytesRead = in.read(buff);
-				
-				if (bytesRead >= 0)
-				{
-					bytesLeft = bytesLeft-bytesRead;
-					System.out.println("read bytes: " + bytesRead + ", to read: " + bytesLeft);
-					
-					// unmask the data (if masked)
-					if (masked && bytesRead > 0)
-					{
-						buff = unmask(buff, bytesRead, mask);
-					}
+        // get the first byte
+        setStatus(in.read());
+        
+        // figure out the payload length
+        setPayload(in);
+        
+        // read in the rest..if the payload is non-zero
+        if (payloadSize > 0)
+        {
+            // figure out the masking
+            if (masked)
+            {
+                mask = 0;
+                for (int i=4; i>0; i--)
+                {
+                    mask += in.read() << ((i-1)*8);
+                }
+                System.out.println("Mask: "+mask);
+            }
+            bytesLeft = payloadSize;
+            
+            do
+            {
+                
+                int defBuff = 1024;
+                if (bytesLeft < defBuff)
+                {
+                    defBuff = (int) bytesLeft;
+                }
+                buff = new byte[defBuff];
+                
+                int bytesRead = in.read(buff);
+                
+                if (bytesRead >= 0)
+                {
+                    bytesLeft = bytesLeft-bytesRead;
+                    System.out.println("read bytes: " + bytesRead + ", to read: " + bytesLeft);
+                    
+                    // unmask the data (if masked)
+                    if (masked && bytesRead > 0)
+                    {
+                        buff = unmask(buff, bytesRead, mask);
+                    }
 
-					// copy data to payload
-					for (int i=0; i<bytesRead; i++)
-					{
-						payload.add(buff[i]);
-					}
-				}
-				else
-				{
-					bytesLeft = 0;
-				}
-				
-			} while (bytesLeft > 0);
-		}
-		
-		if (!controlFrame)
-		{
-			// increment the frame count if its a genuine frame
-			FrameCount += 1;
-			
-			// if this is the first frame, establish the type (binary/text) and if not,
-			// ensure it's a continuation frame
-			if (FrameCount == 1)
-			{
-				if (opcode == WSRequest.OPCODE_BINARY_FRAME)
-				{
-					payloadType = PayloadType.BINARY;
-				}
-				else if (opcode == WSRequest.OPCODE_TEXT_FRAME)
-				{
-					payloadType = PayloadType.TEXT;
-				}
-				else
-				{
-					throw new SWSSException("Unknown opcode ("+opcode+") for non-control frame received.");
-				}
-			}
-			else
-			{
-				if (opcode != WSRequest.OPCODE_CONTINUATION_FRAME)
-				{
-					throw new SWSSException("The opcode for all frames other than the"+
-							" first, must be set to 0 (continuation)");
-				}
-			}
-		}
-	}
-	
-	/**
-	 * Reads the first byte of the incoming data stream and establishes the
-	 * type of the request and the sets the various flags.
-	 * @param status
-	 */
-	private void setStatus(int status)
-	{
-		if ((status & 128) == 128)
-			FIN = true;
-		if ((status & 64) == 64)
-			RSV1 = true;
-		if ((status & 32) == 32)
-			RSV2 = true;
-		if ((status & 16) == 16)
-			RSV3 = true;
-		
-		// if the opcode is 8, then we're closing
-		opcode = (byte) (status & (15)); // lower 4 bits = 1+2+4+8 = 15 
-		if (opcode == WSRequest.OPCODE_CONNECTION_CLOSE)
-		{
-			System.out.println("Received request to close the connection. Returning closing frame");
-			closing = true;
-			try {
-				response = new WSResponse(WSRequest.OPCODE_CONNECTION_CLOSE, "");
-			} catch (UnsupportedEncodingException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		}
-		
-		if (opcode >= 8)
-		{
-		    controlFrame = true;
-		    if (opcode == 0xF) {
-	            closing = true;
-	            try {
-	                response = new WSResponse(WSRequest.OPCODE_CONNECTION_CLOSE, "");
-	            } catch (UnsupportedEncodingException e) {
-	                // TODO Auto-generated catch block
-	                e.printStackTrace();
-	            }
-		    }
-		}
-		else
-		{
-		    controlFrame = false;
-		}
+                    // copy data to payload
+                    for (int i=0; i<bytesRead; i++)
+                    {
+                        payload.add(buff[i]);
+                    }
+                }
+                else
+                {
+                    bytesLeft = 0;
+                }
+                
+            } while (bytesLeft > 0);
+        }
+        
+        if (!controlFrame)
+        {
+            // increment the frame count if its a genuine frame
+            FrameCount += 1;
+            
+            // if this is the first frame, establish the type (binary/text) and if not,
+            // ensure it's a continuation frame
+            if (FrameCount == 1)
+            {
+                if (opcode == WSRequest.OPCODE_BINARY_FRAME)
+                {
+                    payloadType = PayloadType.BINARY;
+                }
+                else if (opcode == WSRequest.OPCODE_TEXT_FRAME)
+                {
+                    payloadType = PayloadType.TEXT;
+                }
+                else
+                {
+                    throw new SWSSException("Unknown opcode ("+opcode+") for non-control frame received.");
+                }
+            }
+            else
+            {
+                if (opcode != WSRequest.OPCODE_CONTINUATION_FRAME)
+                {
+                    throw new SWSSException("The opcode for all frames other than the"+
+                            " first, must be set to 0 (continuation)");
+                }
+            }
+        }
+    }
+    
+    /**
+     * Reads the first byte of the incoming data stream and establishes the
+     * type of the request and the sets the various flags.
+     * @param status
+     */
+    private void setStatus(int status)
+    {
+        if ((status & 128) == 128)
+            FIN = true;
+        if ((status & 64) == 64)
+            RSV1 = true;
+        if ((status & 32) == 32)
+            RSV2 = true;
+        if ((status & 16) == 16)
+            RSV3 = true;
+        
+        // if the opcode is 8, then we're closing
+        opcode = (byte) (status & (15)); // lower 4 bits = 1+2+4+8 = 15 
+        if (opcode == WSRequest.OPCODE_CONNECTION_CLOSE)
+        {
+            System.out.println("Received request to close the connection. Returning closing frame");
+            closing = true;
+            try {
+                response = new WSResponse(WSRequest.OPCODE_CONNECTION_CLOSE, "");
+            } catch (UnsupportedEncodingException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+        }
+        
+        if (opcode >= 8)
+        {
+            controlFrame = true;
+            if (opcode == 0xF) {
+                closing = true;
+                try {
+                    response = new WSResponse(WSRequest.OPCODE_CONNECTION_CLOSE, "");
+                } catch (UnsupportedEncodingException e) {
+                    // TODO Auto-generated catch block
+                    e.printStackTrace();
+                }
+            }
+        }
+        else
+        {
+            controlFrame = false;
+        }
 
-		System.out.println("Opcode: "+opcode);
-	}
-	
-	/**
-	 * Parse the payload length data so that we know how much data to read in during
-	 * the following actions.
-	 * @param request
-	 * @throws IOException
-	 */
-	private void setPayload(InputStream request) throws IOException
-	{
-		byte payloadHeader = (byte) request.read();
-		
-		// first establish any masking..
-		if ((payloadHeader & 128) == 128)
-			masked = true;
-		
-		// then get the intial payload size value
-		payloadSize = ((long) payloadHeader) & 127;
-		
-		// if the payload size is bigger than 125, we need to parse it in..
-		if (payloadSize == 126) // 126 means the length is contained in the next 2 bytes
-		{
-			payloadSize = (request.read() << 8) + (request.read());
-		}
-		else if (payloadSize == 127) // 127 means the length is in the next 8 bytes
-		{
-			payloadSize = 0;
-			for (int i=0; i<8; i++)
-			{
-			    long readIn = request.read();
-				payloadSize += readIn << (i*8);
-			}
-		}
-		
-		// a little debug
-		System.out.println("Payload: " + payloadSize);
-	}
-	
-	private byte[] unmask(byte[] buffer, int length, int mask)
-	{
-		byte[] message = new byte[length];
-		byte[] newMask = intToByteArray(mask);
-		
-		for (int i=0; i<length; i++)
-		{
-			message[i] = (byte) (newMask[i%4] ^ buffer[i]);
-			// System.out.println(Byte.toString(buffer[i]) + ", " + Byte.toString(message[i]) + ", " + Byte.toString(newMask[i%4]));
-		}
-		
-		return message;
-	}
-	
-	/**
-	 * Starts a new WebSocket session by upgrading to the web socket
-	 */
-	private String startSession(InputStream in)
-	throws Exception
-	{
-		WSUpgradeHandler upgradeHandler = new WSUpgradeHandler(new BufferedReader(new InputStreamReader(in)));
-		if (upgradeHandler.isUpgradeRequest(this.server) ) {
-			// generate upgrade response
-			StringBuilder resp = new StringBuilder();
-			resp.append("HTTP/1.1 101 Switching Protocols\r\n");
-			resp.append("Upgrade: websocket\r\n");
-			resp.append("Connection: Upgrade\r\n");
-			resp.append("Sec-WebSocket-Accept: " + upgradeHandler.getAcceptKey() + "\r\n");
-			resp.append("\r\n");
-			System.out.println("Connection established, upgrading to WebSocket");
-			this.server.handler.upgrade(this);
-			return resp.toString();
-		} else {
-			throw new SWSSException("Connection upgrade disallowed. Reason: " + upgradeHandler.getFailure());
-		}
-	}
-	
-	/**
-	 * resets all the flags. This should be called when the initial constructor
-	 * is run and also after a FIN frame is received.
-	 */
-	private void resetFlags()
-	{
-		FIN			= false;
-		RSV1		= false;
-		RSV2		= false;
-		RSV3		= false;
-		opcode		= 0;
-		masked		= false;
-		mask		= 0;
-		payloadSize	= -1;
-		payload.clear();
-		payloadType	= null;
-		FrameCount	= 0;
-	}
-	
-	/**
-	 * helper function to convert an int into a 4 byte array
-	 * @param a
-	 * @return
-	 */
-	public static byte[] intToByteArray(int a)
-	{
-	    return new byte[] {
-	        (byte) ((a >> 24) & 0xFF),
-	        (byte) ((a >> 16) & 0xFF),   
-	        (byte) ((a >> 8) & 0xFF),   
-	        (byte) (a & 0xFF)
-	    };
-	}
-	
-	
-	/*********************************
-	
-	Public API
-	
-	*********************************/
-	
+        System.out.println("Opcode: "+opcode);
+    }
+    
+    /**
+     * Parse the payload length data so that we know how much data to read in during
+     * the following actions.
+     * @param request
+     * @throws IOException
+     */
+    private void setPayload(InputStream request) throws IOException
+    {
+        byte payloadHeader = (byte) request.read();
+        
+        // first establish any masking..
+        if ((payloadHeader & 128) == 128)
+            masked = true;
+        
+        // then get the intial payload size value
+        payloadSize = ((long) payloadHeader) & 127;
+        
+        // if the payload size is bigger than 125, we need to parse it in..
+        if (payloadSize == 126) // 126 means the length is contained in the next 2 bytes
+        {
+            payloadSize = (request.read() << 8) + (request.read());
+        }
+        else if (payloadSize == 127) // 127 means the length is in the next 8 bytes
+        {
+            payloadSize = 0;
+            for (int i=0; i<8; i++)
+            {
+                long readIn = request.read();
+                payloadSize += readIn << (i*8);
+            }
+        }
+        
+        // a little debug
+        System.out.println("Payload: " + payloadSize);
+    }
+    
+    private byte[] unmask(byte[] buffer, int length, int mask)
+    {
+        byte[] message = new byte[length];
+        byte[] newMask = intToByteArray(mask);
+        
+        for (int i=0; i<length; i++)
+        {
+            message[i] = (byte) (newMask[i%4] ^ buffer[i]);
+            // System.out.println(Byte.toString(buffer[i]) + ", " + Byte.toString(message[i]) + ", " + Byte.toString(newMask[i%4]));
+        }
+        
+        return message;
+    }
+    
+    /**
+     * Starts a new WebSocket session by upgrading to the web socket
+     */
+    private String startSession(InputStream in)
+    throws Exception
+    {
+        WSUpgradeHandler upgradeHandler = new WSUpgradeHandler(new BufferedReader(new InputStreamReader(in)));
+        if (upgradeHandler.isUpgradeRequest(this.server) ) {
+            // generate upgrade response
+            StringBuilder resp = new StringBuilder();
+            resp.append("HTTP/1.1 101 Switching Protocols\r\n");
+            resp.append("Upgrade: websocket\r\n");
+            resp.append("Connection: Upgrade\r\n");
+            resp.append("Sec-WebSocket-Accept: " + upgradeHandler.getAcceptKey() + "\r\n");
+            resp.append("\r\n");
+            System.out.println("Connection established, upgrading to WebSocket");
+            this.server.handler.upgrade(this);
+            return resp.toString();
+        } else {
+            throw new SWSSException("Connection upgrade disallowed. Reason: " + upgradeHandler.getFailure());
+        }
+    }
+    
+    /**
+     * resets all the flags. This should be called when the initial constructor
+     * is run and also after a FIN frame is received.
+     */
+    private void resetFlags()
+    {
+        FIN			= false;
+        RSV1		= false;
+        RSV2		= false;
+        RSV3		= false;
+        opcode		= 0;
+        masked		= false;
+        mask		= 0;
+        payloadSize	= -1;
+        payload.clear();
+        payloadType	= null;
+        FrameCount	= 0;
+    }
+    
+    /**
+     * helper function to convert an int into a 4 byte array
+     * @param a
+     * @return
+     */
+    public static byte[] intToByteArray(int a)
+    {
+        return new byte[] {
+            (byte) ((a >> 24) & 0xFF),
+            (byte) ((a >> 16) & 0xFF),   
+            (byte) ((a >> 8) & 0xFF),   
+            (byte) (a & 0xFF)
+        };
+    }
+    
+    
+    /*********************************
+    
+    Public API
+    
+    *********************************/
+    
     /***
      * We take a responseBody (String or byte[]) and push it out through the provided socket
      * @param responseBody
@@ -438,7 +438,7 @@ implements Runnable
         BufferedOutputStream bos = new BufferedOutputStream(socket.getOutputStream());
         synchronized(sendLock) {
             byte[] buff = response.getResponse(); 
-        	bos.write(buff);
+            bos.write(buff);
             bos.flush();
         }
     }
@@ -461,28 +461,28 @@ implements Runnable
     
     public byte[] getMessage()
     {
-		int numBytes = payload.size();
-		byte[] message = new byte[numBytes];
-		for (int i=0; i<numBytes; i++)
-			message[i] = payload.get(i);
-    	return message;
+        int numBytes = payload.size();
+        byte[] message = new byte[numBytes];
+        for (int i=0; i<numBytes; i++)
+            message[i] = payload.get(i);
+        return message;
     }
     
-	public String getMessageString()
-	throws UnsupportedEncodingException
-	{
-		byte[] message = getMessage();
-		return new String(message, "UTF-8");
-	}
-	
-	public String getId()
-	{
-		return this.id;
-	}
-	
-	public int getOpcode()
-	{
-		return opcode;
-	}
+    public String getMessageString()
+    throws UnsupportedEncodingException
+    {
+        byte[] message = getMessage();
+        return new String(message, "UTF-8");
+    }
+    
+    public String getId()
+    {
+        return this.id;
+    }
+    
+    public int getOpcode()
+    {
+        return opcode;
+    }
 
 }

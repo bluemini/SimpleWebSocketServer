@@ -22,9 +22,7 @@
 	} */
 	
 	RTCPeerConnection  = window.mozRTCPeerConnection || window.webkitRTCPeerConnection || window.RTCPeerConnection;
-	console.log(typeof RTCPeerConnection);
-	
-	navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+	GetUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
 	
 	// run start(true) to initiate a call
 	function start(isCaller) {
@@ -67,7 +65,7 @@
 	    }
 
 	    // get the local stream, show it in the local video element and send it
-	    navigator.getUserMedia({ "audio": true, "video": true }, function (stream) {
+	    GetUserMedia({ "audio": true, "video": true }, function (stream) {
 	    	
 	    	selfView.autoplay = true;
 	        selfView.src = URL.createObjectURL(stream);

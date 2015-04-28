@@ -33,19 +33,19 @@ import com.bluemini.websockets.server.Server;
 
 public class SimpleServer {
 
-	/**
-	 * @param args
-	 */
-	public static void main(String[] args) {
-		
-		// We're going to use the echo handler to simply echo back the message
-		Server s = new Server(new WebRTCHandler());
-		
-		// we'll accept connections from all domains
-		s.setHost("*");
-		
-		// start the WebSocket server
-		new Thread(s, "WebSocketServer").start();
-	}
+    /**
+     * @param args
+     */
+    public static void main(String[] args) {
+        
+        // We're going to use the echo handler to simply echo back the message
+        Server s = new Server(new WebRTCHandler());
+        
+        // we'll accept connections from all domains
+        s.setHost("*");
+        
+        // start the WebSocket server
+        new Thread(s, "WebSocketServer").start();
+    }
 
 }

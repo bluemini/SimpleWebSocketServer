@@ -29,15 +29,17 @@
 package com.bluemini.websockets.server;
 
 public class SWSSException extends Exception {
-	
-	public SWSSException()
-	{
-		super("Unknown error");
-	}
-	
-	public SWSSException(String err)
-	{
-		super(err);
-	}
-	
+    
+    private static final long serialVersionUID = -4484164008545386326L;
+
+    public SWSSException()
+    {
+        super("Unknown error");
+    }
+    
+    public SWSSException(String err)
+    {
+        super(err);
+    }
+    
 }

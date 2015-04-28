@@ -1,12 +1,42 @@
+/**
+ * Copyright (c) 2012, Nick Harvey
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * - Redistributions of source code must retain the above copyright notice, this
+ *   list of conditions and the following disclaimer.
+ * - Redistributions in binary form must reproduce the above copyright notice,
+ *   this list of conditions and the following disclaimer in the documentation
+ *   and/or other materials provided with the distribution.
+ * - Neither the name of the <ORGANIZATION> nor the names of its contributors
+ *   may be used to endorse or promote products derived from this software
+ *   without specific prior written permission.
+ *   
+ *   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ *   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ *   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ *   ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ *   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ *   CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ *   SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ *   CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ *   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *   POSSIBILITY OF SUCH DAMAGE.
+ */
 package com.bluemini.websockets;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
 import java.util.Scanner;
 
 import org.apache.commons.daemon.Daemon;
 import org.apache.commons.daemon.DaemonContext;
 import org.apache.log4j.Appender;
 import org.apache.log4j.FileAppender;
-import org.apache.log4j.Layout;
 import org.apache.log4j.Logger;
 
 import com.bluemini.websockets.server.SWSSHandler;
@@ -21,6 +51,9 @@ public class ServerWrapper implements Daemon {
     private static final Logger log = Logger.getLogger("SWSS");
     private static Server engine = null;
     private static Thread mainThread = null;
+    private static Properties swssProperties = null;
+    private static String socketHandlerClass = "com.bluemini.websockets.EchoHandler";
+
 
     private static ServerWrapper engineLauncherInstance = new ServerWrapper();
 
@@ -28,7 +61,7 @@ public class ServerWrapper implements Daemon {
     public ServerWrapper()
     {
         try {
-        	Appender l = new FileAppender(new org.apache.log4j.SimpleLayout(), System.getProperty("user.home") + "\\swss.log");
+            Appender l = new FileAppender(new org.apache.log4j.SimpleLayout(), System.getProperty("user.home") + "\\swss.log");
             log.addAppender(l);
         } catch (Exception e) {
             //
@@ -40,6 +73,7 @@ public class ServerWrapper implements Daemon {
      * @param args Command line arguments, all ignored.
      */
     public static void main(String[] args) {
+        loadProperties();
         // the main routine is only here so I can also run the app from the command line
         engineLauncherInstance.initialize();
         
@@ -59,12 +93,26 @@ public class ServerWrapper implements Daemon {
             log.info("User entered some text: " + comm);
         }
 
-        if (!engine.keepServing) {
-            log.info("Attempting to terminate SWSS");
-            engineLauncherInstance.terminate();
-        }
         engineLauncherInstance.terminate();
 
+    }
+    
+    private static void loadProperties()
+    {
+        try {    
+            swssProperties = new Properties();
+            InputStream propertyStream = ServerWrapper.class.getResourceAsStream("/setting.properties");
+            if (propertyStream != null)
+            {
+                swssProperties.load(ServerWrapper.class.getResourceAsStream("/setting.properties"));  //Assuming it is at top level, not under any package
+                if (swssProperties.contains("handlerclass"))
+                {
+                        swssProperties.getProperty("handlerclass");
+                }
+            }
+        } catch (IOException ex) {
+            System.out.println("Could not open Config file");    
+        }  
     }
     
     /**
@@ -85,11 +133,11 @@ public class ServerWrapper implements Daemon {
         }
 
         if ("start".equals(cmd)) {
-        	log.info("Calling windowsStart from windowsService");
+            log.info("Calling windowsStart from windowsService");
             engineLauncherInstance.windowsStart();
         }
         else {
-        	log.info("Calling windowsStop from windowsService");
+            log.info("Calling windowsStop from windowsService");
             engineLauncherInstance.windowsStop();
         }
     }
@@ -111,7 +159,7 @@ public class ServerWrapper implements Daemon {
 
     public void windowsStop()
     {
-    	terminate();
+        terminate();
         synchronized(this) {
             // stop the start loop
             this.notify();
@@ -149,13 +197,12 @@ public class ServerWrapper implements Daemon {
      */
     private void initialize()
     {
-        String className = "com.bluemini.webrtc.WebRTCHandler";
         if (engine == null) {
             log.info("Starting the Engine");
             
             // We're going to use the echo handler to simply echo back the message
             try {
-                SWSSHandler handler = (SWSSHandler) Class.forName(className).newInstance();
+                SWSSHandler handler = (SWSSHandler) Class.forName(socketHandlerClass).newInstance();
                 engine = new Server(handler);
                 
                 // we'll accept connections from all domains
@@ -167,7 +214,7 @@ public class ServerWrapper implements Daemon {
             }
             catch (ClassNotFoundException cnfe)
             {
-                log.error("Class not found: " + className);
+                log.error("Class not found: " + socketHandlerClass);
             }
             catch (Exception e)
             {

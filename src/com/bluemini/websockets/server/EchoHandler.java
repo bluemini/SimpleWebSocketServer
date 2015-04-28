@@ -31,18 +31,28 @@ package com.bluemini.websockets.server;
 import java.io.UnsupportedEncodingException;
 
 public class EchoHandler extends SWSSHandler {
-	
-	public void response(WSRequest request)
-	{
-	    byte[] mess = request.getMessage();
-	    try
-	    {
-			sendResponse(request, new WSResponse(WSRequest.OPCODE_TEXT_FRAME, mess) );
-	    }
-	    catch (UnsupportedEncodingException uee)
-	    {
-	    	System.out.println("ERROR: Problems encoding the message.");
-	    }
-	}
+    
+    public void response(WSRequest request)
+    {
+        byte[] mess = request.getMessage();
+        try
+        {
+            sendResponse(request, new WSResponse(WSRequest.OPCODE_TEXT_FRAME, mess) );
+        }
+        catch (UnsupportedEncodingException uee)
+        {
+            System.out.println("ERROR: Problems encoding the message.");
+        }
+    }
+
+    @Override
+    public void upgrade(WSRequest request) {
+        // do nothing on upgrade
+    }
+
+    @Override
+    public void onClose(WSRequest request) {
+        // do nothing on close
+    }
 
 }
