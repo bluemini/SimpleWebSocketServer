@@ -1,3 +1,4 @@
+@ECHO OFF
 SETLOCAL
 
 if exist "%JAVA_HOME%\bin\java.exe" goto setJavaHome
@@ -21,15 +22,11 @@ set JAVA_OPTS=
 REM echo Starting SWSS Server
 REM %JAVA% %JAVA_OPTS% -cp "%CLASSPATH%" "%SWSS_MAIN%"
 
-REM swss32.exe //DS/swss32
-
-swss32.exe //US//swss32 --DisplayName="Simple Socket Server" --Install="%CD%\swss32.exe" ^
+swss32.exe //IS//swss32 --DisplayName="Simple Socket Server" --Install="%CD%\swss32.exe" ^
 		--Classpath=%CLASSPATH% ^
 		--Jvm=auto --StartMode=jvm --StopMode=jvm ^
-		--StartClass=com.bluemini.websockets.ServerWrapper --StartMethod=windowsService --StartParams=start ^
-		--StopClass=com.bluemini.websockets.ServerWrapper --StopMethod=windowsService --StopParams=stop
-
-REM swss32.exe //TS//swss32 --DisplayName="Simple Socket Server"
+		--StartClass=com.bluemini.websockets.ServerWrapper --StartMethod=start --StartParams=start ^
+		--StopClass=com.bluemini.websockets.ServerWrapper --StopMethod=stop --StopParams=stop
 
 ENDLOCAL
 @ECHO ON
